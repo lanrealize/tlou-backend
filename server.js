@@ -42,7 +42,7 @@ app.use('*', (req, res) => {
 app.use(globalErrorHandler);
 
 // 连接数据库
-mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/tlou_social', {
+mongoose.connect(process.env.MONGODB_URI, {
   useNewUrlParser: true,
   useUnifiedTopology: true,
 })
