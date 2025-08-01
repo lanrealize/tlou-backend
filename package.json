@@ -29,7 +29,8 @@
     "express-rate-limit": "^6.10.0",
     "express-validator": "^7.0.1",
     "helmet": "^7.0.0",
-    "mongoose": "^7.5.0"
+    "mongoose": "^7.5.0",
+    "qiniu": "^7.14.0"
   },
   "devDependencies": {
     "jest": "^29.6.2",

@@ -28,6 +28,9 @@ app.use('/api/wechat', require('./routes/wechat'));
 app.use('/api/circles', require('./routes/circles'));
 app.use('/api/posts', require('./routes/posts'));
 
+// 七牛云图片上传路由 (独立模块)
+app.use('/api/qiniu', require('./routes/qiniu'));
+
 // 健康检查
 app.get('/health', (req, res) => {
   res.json({ status: 'OK', message: '服务器运行正常' });

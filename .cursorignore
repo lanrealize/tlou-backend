@@ -1,0 +1,18 @@
+# Cursor ignore file
+# This file tells Cursor what files NOT to ignore (opposite of gitignore)
+# We want Cursor to be able to read .env files for development
+
+# Don't ignore .env files in Cursor
+!.env
+!.env.*
+
+# Still ignore large directories and build outputs
+node_modules/
+dist/
+build/
+coverage/
+.nyc_output/
+uploads/
+tmp/
+temp/
+test-results/

@@ -71,6 +71,9 @@ tlou-backend/
 - `simple-test.js` - 简单测试文件
 - `install-test-deps.js` - 测试依赖安装脚本
 - `run-test.js` - 测试运行脚本
+- `clear-users.js` - 数据库用户清理脚本
+- `debug-routes.js` - API调试测试脚本
+- `qiniu-server.js` - 七牛云独立测试服务器
 
 ## ✅ 项目状态
 - **核心功能**: 完整的微信朋友圈后端API
