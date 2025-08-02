@@ -300,4 +300,168 @@ describe('Circles Routes Test', () => {
       });
     });
   });
+
+  describe('PATCH /api/circles/:id/settings', () => {
+    test('should update circle settings successfully', async () => {
+      const settingsData = {
+        name: '更新后的朋友圈',
+        isPublic: false,
+        description: '这是一个私密的朋友圈',
+        allowInvite: false,
+        allowPost: true,
+        openid: testUser.openid
+      };
+
+      const response = await request(app)
+        .patch(`/api/circles/${testCircle._id}/settings`)
+        .send(settingsData)
+        .expect(200);
+
+      expect(response.body).toEqual({
+        success: true,
+        message: '朋友圈设置更新成功',
+        data: {
+          circle: expect.objectContaining({
+            name: '更新后的朋友圈',
+            isPublic: false,
+            description: '这是一个私密的朋友圈',
+            allowInvite: false,
+            allowPost: true,
+            creator: expect.objectContaining({
+              _id: testUser._id.toString(),
+              username: testUser.username
+            })
+          })
+        }
+      });
+    });
+
+    test('should update only provided fields', async () => {
+      const settingsData = {
+        isPublic: false,
+        openid: testUser.openid
+      };
+
+      const response = await request(app)
+        .patch(`/api/circles/${testCircle._id}/settings`)
+        .send(settingsData)
+        .expect(200);
+
+      expect(response.body).toEqual({
+        success: true,
+        message: '朋友圈设置更新成功',
+        data: {
+          circle: expect.objectContaining({
+            name: testCircle.name, // 原名称不变
+            isPublic: false, // 更新的字段
+            creator: expect.objectContaining({
+              _id: testUser._id.toString()
+            })
+          })
+        }
+      });
+    });
+
+    test('should return 404 when circle does not exist', async () => {
+      const fakeId = '507f1f77bcf86cd799439011';
+      const settingsData = {
+        isPublic: false,
+        openid: testUser.openid
+      };
+
+      const response = await request(app)
+        .patch(`/api/circles/${fakeId}/settings`)
+        .send(settingsData)
+        .expect(404);
+
+      expect(response.body).toEqual({
+        status: 'fail',
+        message: '朋友圈不存在'
+      });
+    });
+
+    test('should return 403 when non-creator tries to update settings', async () => {
+      const member = await createTestUser();
+      const settingsData = {
+        isPublic: false,
+        openid: member.openid
+      };
+
+      const response = await request(app)
+        .patch(`/api/circles/${testCircle._id}/settings`)
+        .send(settingsData)
+        .expect(403);
+
+      expect(response.body).toEqual({
+        status: 'fail',
+        message: '只有创建者可以修改朋友圈设置'
+      });
+    });
+
+    test('should return 400 when no fields provided', async () => {
+      const settingsData = {
+        openid: testUser.openid
+      };
+
+      const response = await request(app)
+        .patch(`/api/circles/${testCircle._id}/settings`)
+        .send(settingsData)
+        .expect(400);
+
+      expect(response.body).toEqual({
+        status: 'fail',
+        message: '请提供要更新的字段'
+      });
+    });
+
+    test('should return 400 when name is too long', async () => {
+      const settingsData = {
+        name: 'a'.repeat(51), // 超过50个字符
+        openid: testUser.openid
+      };
+
+      const response = await request(app)
+        .patch(`/api/circles/${testCircle._id}/settings`)
+        .send(settingsData)
+        .expect(400);
+
+      expect(response.body).toEqual({
+        status: 'fail',
+        message: '输入验证失败: 朋友圈名称长度应在1-50个字符之间'
+      });
+    });
+
+    test('should return 400 when description is too long', async () => {
+      const settingsData = {
+        description: 'a'.repeat(201), // 超过200个字符
+        openid: testUser.openid
+      };
+
+      const response = await request(app)
+        .patch(`/api/circles/${testCircle._id}/settings`)
+        .send(settingsData)
+        .expect(400);
+
+      expect(response.body).toEqual({
+        status: 'fail',
+        message: '输入验证失败: 朋友圈描述不能超过200个字符'
+      });
+    });
+
+    test('should return 401 when openid is missing', async () => {
+      const settingsData = {
+        isPublic: false
+      };
+
+      const response = await request(app)
+        .patch(`/api/circles/${testCircle._id}/settings`)
+        .send(settingsData)
+        .expect(401);
+
+      expect(response.body).toEqual({
+        status: 'fail',
+        message: '缺少openid参数'
+      });
+    });
+  });
 }); 

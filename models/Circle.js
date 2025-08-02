@@ -3,7 +3,8 @@ const mongoose = require('mongoose');
 const circleSchema = new mongoose.Schema({
   name: {
     type: String,
-    required: true
+    required: true,
+    maxlength: 50
   },
   creator: {
     type: mongoose.Schema.Types.ObjectId,
@@ -17,6 +18,20 @@ const circleSchema = new mongoose.Schema({
   isPublic: {
     type: Boolean,
     default: true
+  },
+  description: {
+    type: String,
+    maxlength: 200,
+    default: ''
+  },
+  // 权限设置
+  allowInvite: {
+    type: Boolean,
+    default: true  // 是否允许成员邀请其他人
+  },
+  allowPost: {
+    type: Boolean,
+    default: true  // 是否允许成员发帖
   },
   // 统计信息
   stats: {

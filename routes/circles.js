@@ -138,4 +138,74 @@ router.delete('/:id/leave', checkOpenid, catchAsync(async (req, res) => {
   });
 }));
 
+// 更新朋友圈设置
+router.patch('/:id/settings', checkOpenid, [
+  body('name')
+    .optional()
+    .isString()
+    .isLength({ min: 1, max: 50 })
+    .withMessage('朋友圈名称长度应在1-50个字符之间'),
+  body('isPublic')
+    .optional()
+    .isBoolean()
+    .withMessage('公开状态必须是布尔值'),
+  body('description')
+    .optional()
+    .isString()
+    .isLength({ max: 200 })
+    .withMessage('朋友圈描述不能超过200个字符'),
+  body('allowInvite')
+    .optional()
+    .isBoolean()
+    .withMessage('邀请权限必须是布尔值'),
+  body('allowPost')
+    .optional()
+    .isBoolean()
+    .withMessage('发帖权限必须是布尔值')
+], catchAsync(async (req, res) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    throw new AppError('输入验证失败: ' + errors.array().map(e => e.msg).join(', '), 400);
+  }
+
+  const circle = await Circle.findById(req.params.id);
+
+  if (!circle) {
+    throw new AppError('朋友圈不存在', 404);
+  }
+
+  // 只有创建者可以修改设置
+  if (circle.creator.toString() !== req.user._id.toString()) {
+    throw new AppError('只有创建者可以修改朋友圈设置', 403);
+  }
+
+  // 构建更新对象，只包含传入的字段
+  const updateFields = {};
+  const allowedFields = ['name', 'isPublic', 'description', 'allowInvite', 'allowPost'];
+  
+  allowedFields.forEach(field => {
+    if (req.body[field] !== undefined) {
+      updateFields[field] = req.body[field];
+    }
+  });
+
+  // 如果没有要更新的字段
+  if (Object.keys(updateFields).length === 0) {
+    throw new AppError('请提供要更新的字段', 400);
+  }
+
+  // 更新朋友圈
+  const updatedCircle = await Circle.findByIdAndUpdate(
+    req.params.id,
+    updateFields,
+    { new: true, runValidators: true }
+  ).populate('creator', 'username avatar');
+
+  res.json({
+    success: true,
+    message: '朋友圈设置更新成功',
+    data: { circle: updatedCircle }
+  });
+}));
+
 module.exports = router; 
