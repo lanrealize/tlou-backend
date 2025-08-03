@@ -55,6 +55,13 @@ const circleSchema = new mongoose.Schema({
   timestamps: true
 });
 
+// 添加索引以优化public朋友圈的检索
+circleSchema.index({ isPublic: 1 });
+// 复合索引：公开状态 + 最新活动时间，用于高效查询活跃的public朋友圈
+circleSchema.index({ isPublic: 1, latestActivityTime: -1 });
+// 复合索引：公开状态 + 创建时间，用于查询最新的public朋友圈
+circleSchema.index({ isPublic: 1, createdAt: -1 });
+
 // 检查用户是否是成员
 circleSchema.methods.isMember = function(userId) {
   return this.members.includes(userId) || this.creator.toString() === userId.toString();

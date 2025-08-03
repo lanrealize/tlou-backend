@@ -6,6 +6,7 @@ const { checkOpenid } = require('../middleware/openidAuth');
 const { catchAsync, AppError } = require('../utils/errorHandler');
 const Post = require('../models/Post'); // 需要引入Post模型
 const { updateCircleActivity } = require('../utils/circleUtils'); // 添加朋友圈活动更新工具
+const randomCircleController = require('../controllers/randomCircle.controller');
 
 const router = express.Router();
 
@@ -501,7 +502,14 @@ router.get('/:id/invitees', checkOpenid, catchAsync(async (req, res) => {
   });
 }));
 
+// ========== 随机公开朋友圈接口 ==========
+// ✅ 重要：具体路由必须在通用路由/:id之前定义！
+
+// 获取随机public朋友圈
+router.get('/random', checkOpenid, randomCircleController.getRandomPublicCircle);
+
 // 获取单个朋友圈详情（支持公开朋友圈和邀请访问）
+// ✅ 通用动态路由/:id必须放在最后，避免拦截具体路由
 router.get('/:id', checkOpenid, catchAsync(async (req, res) => {
   const circleId = req.params.id;
   const userId = req.user?._id;
