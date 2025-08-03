@@ -28,6 +28,9 @@ app.use('/api/wechat', require('./routes/wechat'));
 app.use('/api/circles', require('./routes/circles'));
 app.use('/api/posts', require('./routes/posts'));
 
+// 管理员路由 (虚拟用户管理)
+app.use('/api/admin', require('./routes/admin'));
+
 // 七牛云图片上传路由 (独立模块)
 app.use('/api/qiniu', require('./routes/qiniu'));
 

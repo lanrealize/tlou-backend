@@ -30,7 +30,8 @@
     "express-validator": "^7.0.1",
     "helmet": "^7.0.0",
     "mongoose": "^7.5.0",
-    "qiniu": "^7.14.0"
+    "qiniu": "^7.14.0",
+    "uuid": "^11.1.0"
   },
   "devDependencies": {
     "jest": "^29.6.2",
