@@ -15,6 +15,14 @@ const circleSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User'
   }],
+  appliers: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User'
+  }],
+  invitees: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User'
+  }],
   isPublic: {
     type: Boolean,
     default: true
@@ -37,6 +45,11 @@ const circleSchema = new mongoose.Schema({
   stats: {
     totalPosts: { type: Number, default: 0 },
     totalMembers: { type: Number, default: 0 }
+  },
+  // 最新活动时间
+  latestActivityTime: {
+    type: Date,
+    default: Date.now
   }
 }, {
   timestamps: true
@@ -47,9 +60,38 @@ circleSchema.methods.isMember = function(userId) {
   return this.members.includes(userId) || this.creator.toString() === userId.toString();
 };
 
+// 检查用户是否已申请加入
+circleSchema.methods.isApplier = function(userId) {
+  return this.appliers.includes(userId);
+};
+
+// 检查用户是否是创建者
+circleSchema.methods.isCreator = function(userId) {
+  return this.creator.toString() === userId.toString();
+};
+
+// 检查用户是否被邀请
+circleSchema.methods.isInvitee = function(userId) {
+  return this.invitees.includes(userId);
+};
+
+// 检查用户是否有任何角色（creator, member, applier, invitee中的任意一种）
+circleSchema.methods.hasAnyRole = function(userId) {
+  return this.isCreator(userId) || 
+         this.isMember(userId) || 
+         this.isApplier(userId) || 
+         this.isInvitee(userId);
+};
+
 // 更新成员统计
 circleSchema.methods.updateMemberStats = function() {
   this.stats.totalMembers = this.members.length + 1; // +1 for creator
+};
+
+// 更新最新活动时间
+circleSchema.methods.updateActivityTime = function() {
+  this.latestActivityTime = new Date();
+  return this.save();
 };
 
 module.exports = mongoose.model('Circle', circleSchema); 

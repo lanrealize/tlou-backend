@@ -78,6 +78,24 @@ describe('Circle Model Test', () => {
       expect(circle.stats.totalPosts).toBe(0);
       expect(circle.stats.totalMembers).toBe(0);
     });
+
+    test('should set default latestActivityTime', async () => {
+      const creator = await createTestUser();
+      const circleData = {
+        name: '测试朋友圈',
+        creator: creator._id,
+        members: [creator._id]
+      };
+
+      const beforeCreate = new Date();
+      const circle = await Circle.create(circleData);
+      const afterCreate = new Date();
+
+      expect(circle.latestActivityTime).toBeDefined();
+      expect(circle.latestActivityTime instanceof Date).toBe(true);
+      expect(circle.latestActivityTime.getTime()).toBeGreaterThanOrEqual(beforeCreate.getTime());
+      expect(circle.latestActivityTime.getTime()).toBeLessThanOrEqual(afterCreate.getTime());
+    });
   });
 
   describe('Circle Instance Methods', () => {
@@ -117,6 +135,25 @@ describe('Circle Model Test', () => {
 
       circle.updateMemberStats();
       expect(circle.stats.totalMembers).toBe(3); // creator + 2 members
+    });
+
+    test('should update activity time correctly', async () => {
+      const creator = await createTestUser();
+      const circle = await Circle.create({
+        name: '测试朋友圈',
+        creator: creator._id,
+        members: [creator._id],
+        isPublic: true
+      });
+
+      const originalActivityTime = circle.latestActivityTime;
+      
+      // 等待一小段时间确保时间差异
+      await new Promise(resolve => setTimeout(resolve, 10));
+      
+      await circle.updateActivityTime();
+      
+      expect(circle.latestActivityTime.getTime()).toBeGreaterThan(originalActivityTime.getTime());
     });
   });
 

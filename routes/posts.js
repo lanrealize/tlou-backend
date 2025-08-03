@@ -6,8 +6,45 @@ const { checkOpenid } = require('../middleware/openidAuth');
 const { catchAsync, AppError, globalErrorHandler } = require('../utils/errorHandler');
 const User = require('../models/User'); // Added for comments
 const mongoose = require('mongoose'); // Added for mongoose.Types.ObjectId
+const qiniu = require('qiniu'); // 🆕 添加这行
+const { updateCircleActivity } = require('../utils/circleUtils'); // 添加朋友圈活动更新工具
 
 const router = express.Router();
+
+// 🆕 添加这个简单的删除函数
+async function deleteQiniuFiles(imageUrls) {
+  if (!imageUrls || imageUrls.length === 0) return;
+  
+  // 从环境变量获取密钥（如果没有就跳过删除）
+  const accessKey = process.env.QINIU_ACCESS_KEY;
+  const secretKey = process.env.QINIU_SECRET_KEY;
+  
+  if (!accessKey || !secretKey) {
+    console.warn('⚠️ 七牛云密钥未配置，跳过文件删除');
+    return;
+  }
+
+  const mac = new qiniu.auth.digest.Mac(accessKey, secretKey);
+  const bucketManager = new qiniu.rs.BucketManager(mac);
+  const bucket = 'tlou';
+
+  for (const url of imageUrls) {
+    try {
+      // 从URL提取key: https://domain.com/path/file.jpg -> path/file.jpg
+      const key = new URL(url).pathname.substring(1);
+      
+      bucketManager.delete(bucket, key, (err, respBody, respInfo) => {
+        if (err) {
+          console.error('❌ 文件删除失败:', key, err);
+        } else if (respInfo.statusCode === 200) {
+          console.log('✅ 文件删除成功:', key);
+        }
+      });
+    } catch (error) {
+      console.warn('⚠️ URL解析失败:', url);
+    }
+  }
+}
 
 // 创建帖子
 router.post('/', checkOpenid, [
@@ -32,6 +69,14 @@ router.post('/', checkOpenid, [
 
   const { circleId, content, images } = req.body;
 
+  // 🆕 添加这几行：兼容前端新格式，但仍然只存储URL
+  const imageUrls = images ? images.map(img => {
+    if (typeof img === 'string') {
+      return img; // 旧格式：直接是URL
+    }
+    return img.url; // 新格式：提取URL
+  }) : [];
+
   // 检查朋友圈是否存在
   const circle = await Circle.findById(circleId);
   if (!circle) {
@@ -47,11 +92,14 @@ router.post('/', checkOpenid, [
     author: req.user._id,
     circle: circleId,
     content,
-    images: images || []
+    images: imageUrls  // 仍然存储URL数组
   });
 
   // 填充作者信息
   await post.populate('author', 'username avatar');
+
+  // 更新朋友圈活动时间
+  updateCircleActivity(circleId);
 
   res.status(201).json({
     success: true,
@@ -81,7 +129,8 @@ router.get('/', checkOpenid, [
     throw new AppError('朋友圈不存在', 404);
   }
 
-  if (!circle.isPublic && !circle.isMember(req.user._id)) {
+  // 权限检查：公开朋友圈所有人都能看，私密朋友圈只有creator、member、invitee能看（applier不能看）
+  if (!circle.isPublic && !(circle.isCreator(req.user._id) || circle.isMember(req.user._id) || circle.isInvitee(req.user._id))) {
     throw new AppError('无权查看此朋友圈的帖子', 403);
   }
 
@@ -162,6 +211,12 @@ router.post('/:id/like', checkOpenid, catchAsync(async (req, res) => {
     await Post.findByIdAndUpdate(postId, {
       $addToSet: { likes: userId }
     });
+    
+    // 只在点赞时更新朋友圈活动时间（取消点赞不更新）
+    const postWithCircle = await Post.findById(postId, 'circle');
+    if (postWithCircle) {
+      updateCircleActivity(postWithCircle.circle);
+    }
   }
 
   res.json({
@@ -176,15 +231,23 @@ router.delete('/:id', checkOpenid, catchAsync(async (req, res) => {
   const postId = req.params.id;
   const userId = req.user._id;
 
-  // 一次操作完成查询、权限检查和删除
-  const result = await Post.findOneAndDelete({
+  // 🆕 添加这段：先查询获取图片URLs
+  const post = await Post.findOne({
     _id: postId,
-    author: userId  // 只删除自己的帖子
+    author: userId
   });
 
-  if (!result) {
+  if (!post) {
     throw new AppError('帖子不存在或无权限删除', 404);
   }
+
+  // 🆕 添加这行：异步删除七牛云文件
+  if (post.images && post.images.length > 0) {
+    setImmediate(() => deleteQiniuFiles(post.images));
+  }
+
+  // 原有删除逻辑不变
+  await Post.findByIdAndDelete(postId);
 
   res.json({
     success: true,
@@ -241,6 +304,9 @@ router.post('/:id/comments', checkOpenid, [
     { _id: postId },
     { $push: { comments: newComment } }
   );
+
+  // 更新朋友圈活动时间
+  updateCircleActivity(post.circle);
 
   res.status(201).json({
     success: true,

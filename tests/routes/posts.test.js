@@ -52,6 +52,74 @@ describe('Posts Routes Test', () => {
       });
     });
 
+    test('should create post with new image format (object with url)', async () => {
+      const postData = {
+        circleId: testCircle._id.toString(),
+        content: '测试帖子内容',
+        images: [
+          { url: 'https://tlou.images.wltech-service.site/image1.jpg', name: 'image1.jpg' },
+          { url: 'https://tlou.images.wltech-service.site/image2.jpg', name: 'image2.jpg' }
+        ],
+        openid: testUser.openid
+      };
+
+      const response = await request(app)
+        .post('/api/posts')
+        .send(postData)
+        .expect(201);
+
+      expect(response.body).toEqual({
+        success: true,
+        message: '发布成功',
+        data: {
+          post: expect.objectContaining({
+            content: '测试帖子内容',
+            images: [
+              'https://tlou.images.wltech-service.site/image1.jpg',
+              'https://tlou.images.wltech-service.site/image2.jpg'
+            ],
+            author: expect.objectContaining({
+              username: testUser.username
+            })
+          })
+        }
+      });
+    });
+
+    test('should create post with mixed image formats', async () => {
+      const postData = {
+        circleId: testCircle._id.toString(),
+        content: '测试帖子内容',
+        images: [
+          'oldformat.jpg',  // 旧格式：直接URL字符串
+          { url: 'https://tlou.images.wltech-service.site/newformat.jpg', name: 'newformat.jpg' }  // 新格式：对象
+        ],
+        openid: testUser.openid
+      };
+
+      const response = await request(app)
+        .post('/api/posts')
+        .send(postData)
+        .expect(201);
+
+      expect(response.body).toEqual({
+        success: true,
+        message: '发布成功',
+        data: {
+          post: expect.objectContaining({
+            content: '测试帖子内容',
+            images: [
+              'oldformat.jpg',
+              'https://tlou.images.wltech-service.site/newformat.jpg'
+            ],
+            author: expect.objectContaining({
+              username: testUser.username
+            })
+          })
+        }
+      });
+    });
+
     test('should return 400 when circleId is missing', async () => {
       const postData = {
         content: '测试帖子内容',
@@ -282,6 +350,63 @@ describe('Posts Routes Test', () => {
         success: true,
         message: '帖子删除成功'
       });
+    });
+
+    test('should delete post with images and trigger qiniu cleanup', async () => {
+      // 创建带有图片的测试帖子
+      const postWithImages = await createTestPost({
+        content: '带图片的帖子',
+        images: [
+          'https://tlou.images.wltech-service.site/test1.jpg',
+          'https://tlou.images.wltech-service.site/test2.jpg'
+        ]
+      }, testUser, testCircle);
+
+      // 模拟控制台日志以验证七牛云删除被调用
+      const originalConsoleLog = console.log;
+      const originalConsoleWarn = console.warn;
+      const originalConsoleError = console.error;
+      const mockLogs = [];
+
+      console.log = (...args) => {
+        mockLogs.push({ type: 'log', args });
+        originalConsoleLog(...args);
+      };
+      console.warn = (...args) => {
+        mockLogs.push({ type: 'warn', args });
+        originalConsoleWarn(...args);
+      };
+      console.error = (...args) => {
+        mockLogs.push({ type: 'error', args });
+        originalConsoleError(...args);
+      };
+
+      const response = await request(app)
+        .delete(`/api/posts/${postWithImages._id}`)
+        .send({ openid: testUser.openid })
+        .expect(200);
+
+      expect(response.body).toEqual({
+        success: true,
+        message: '帖子删除成功'
+      });
+
+      // 等待一小段时间让异步操作完成
+      await new Promise(resolve => setTimeout(resolve, 100));
+
+      // 恢复原始console方法
+      console.log = originalConsoleLog;
+      console.warn = originalConsoleWarn;
+      console.error = originalConsoleError;
+
+      // 验证七牛云删除相关的日志被记录（成功或失败都可以，取决于环境配置）
+      const hasQiniuLogs = mockLogs.some(log => 
+        log.args.some(arg => 
+          typeof arg === 'string' && 
+          (arg.includes('文件删除') || arg.includes('七牛云密钥'))
+        )
+      );
+      expect(hasQiniuLogs).toBe(true);
     });
 
     test('should return 404 when post does not exist', async () => {
