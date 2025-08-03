@@ -14,6 +14,11 @@ jest.mock('express-validator', () => ({
   }))
 }));
 
+// Mock UUID generation for faster tests
+jest.mock('uuid', () => ({
+  v4: jest.fn(() => 'a1b2c3d4-e5f6-7890-1234-567890abcdef')
+}));
+
 describe('Virtual User Controller', () => {
   let adminUser;
   let testUser;
