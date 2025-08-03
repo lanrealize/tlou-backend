@@ -24,6 +24,11 @@ const userSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
     default: null  // 只有虚拟用户才有这个字段
+  },
+  // 管理员标识
+  isAdmin: {
+    type: Boolean,
+    default: false
   }
 }, {
   timestamps: true

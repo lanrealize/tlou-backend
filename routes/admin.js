@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { body, param } = require('express-validator');
 const { checkOpenid } = require('../middleware/openidAuth');
+const { checkAdmin } = require('../middleware/adminAuth');
 const { 
   createVirtualUser, 
   getVirtualUsers, 
@@ -10,9 +11,9 @@ const {
 } = require('../controllers/virtualUser.controller');
 const { catchAsync } = require('../utils/errorHandler');
 
-// 所有管理员路由都需要先验证openid
-// 管理员权限检查在控制器内部完成
+// 所有管理员路由都需要先验证openid，再验证管理员权限
 router.use(checkOpenid);
+router.use(checkAdmin);
 
 // 创建虚拟用户
 router.post('/virtual-users', [

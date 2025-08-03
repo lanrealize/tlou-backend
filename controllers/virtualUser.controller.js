@@ -2,19 +2,6 @@ const User = require('../models/User');
 const { AppError } = require('../utils/errorHandler');
 const { v4: uuidv4 } = require('uuid');
 
-// 简化的管理员权限检查
-function checkAdminPermission(req) {
-  const adminOpenid = process.env.ADMIN_OPENID;
-  
-  if (!adminOpenid) {
-    throw new AppError('系统配置错误：未设置管理员openid', 500);
-  }
-  
-  if (req.user.openid !== adminOpenid) {
-    throw new AppError('无权限访问管理功能', 403);
-  }
-}
-
 // 生成虚拟openid
 function generateVirtualOpenid() {
   return `virtual_${uuidv4().replace(/-/g, '')}`;
@@ -25,9 +12,6 @@ async function createVirtualUser(req, res) {
   const { username, avatar, description } = req.body;
   
   try {
-    // 简化的权限检查
-    checkAdminPermission(req);
-    
     if (!username || !avatar) {
       return res.status(400).json({
         success: false,
@@ -100,9 +84,6 @@ async function createVirtualUser(req, res) {
 // 获取管理员的虚拟用户列表
 async function getVirtualUsers(req, res) {
   try {
-    // 简化的权限检查
-    checkAdminPermission(req);
-
     const virtualUsers = await User.find({
       virtualOwner: req.user._id,
       isVirtual: true
@@ -138,9 +119,6 @@ async function deleteVirtualUser(req, res) {
   const { userId } = req.params;
   
   try {
-    // 简化的权限检查
-    checkAdminPermission(req);
-
     const virtualUser = await User.findOne({
       _id: userId,
       virtualOwner: req.user._id,
@@ -185,9 +163,6 @@ async function updateVirtualUser(req, res) {
   const { username, avatar } = req.body;
   
   try {
-    // 简化的权限检查
-    checkAdminPermission(req);
-
     const virtualUser = await User.findOne({
       _id: userId,
       virtualOwner: req.user._id,
