@@ -58,6 +58,7 @@ async function createVirtualUser(req, res) {
           openid: virtualUser.openid,
           avatar: virtualUser.avatar,
           isVirtual: virtualUser.isVirtual,
+          isAdmin: virtualUser.isAdmin,
           createdAt: virtualUser.createdAt
         }
       }
@@ -95,7 +96,7 @@ async function getVirtualUsers(req, res) {
     const virtualUsers = await User.find({
       virtualOwner: effectiveAdmin._id,
       isVirtual: true
-    }).select('_id username openid avatar createdAt').sort({ createdAt: -1 });
+    }).select('_id username openid avatar isAdmin createdAt').sort({ createdAt: -1 });
 
     res.json({
       success: true,
@@ -204,7 +205,7 @@ async function updateVirtualUser(req, res) {
       userId,
       updateData,
       { new: true, runValidators: true }
-    ).select('_id username openid avatar createdAt updatedAt');
+    ).select('_id username openid avatar isAdmin createdAt updatedAt');
     
     console.log(`${req.user.isVirtual ? '虚拟用户' : '管理员'} ${req.user.username} 更新虚拟用户: ${updatedUser.username} (有效管理员: ${effectiveAdmin.username})`);
     
