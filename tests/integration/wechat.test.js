@@ -113,7 +113,8 @@ describe('WeChat Integration Test', () => {
             _id: existingUser._id.toString(),
             openid: 'test_openid_123',
             username: 'test_user',
-            avatar: 'https://example.com/avatar.jpg'
+            avatar: 'https://example.com/avatar.jpg',
+            isAdmin: false
           }
         }
       });
