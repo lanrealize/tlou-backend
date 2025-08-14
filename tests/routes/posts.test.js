@@ -52,13 +52,13 @@ describe('Posts Routes Test', () => {
       });
     });
 
-    test('should create post with new image format (object with url)', async () => {
+    test('should create post with new image format (object with url, width, height)', async () => {
       const postData = {
         circleId: testCircle._id.toString(),
         content: '测试帖子内容',
         images: [
-          { url: 'https://tlou.images.wltech-service.site/image1.jpg', name: 'image1.jpg' },
-          { url: 'https://tlou.images.wltech-service.site/image2.jpg', name: 'image2.jpg' }
+          { url: 'https://tlou.images.wltech-service.site/image1.jpg', width: 300, height: 200 },
+          { url: 'https://tlou.images.wltech-service.site/image2.jpg', width: 400, height: 300 }
         ],
         openid: testUser.openid
       };
@@ -75,8 +75,8 @@ describe('Posts Routes Test', () => {
           post: expect.objectContaining({
             content: '测试帖子内容',
             images: [
-              'https://tlou.images.wltech-service.site/image1.jpg',
-              'https://tlou.images.wltech-service.site/image2.jpg'
+              { url: 'https://tlou.images.wltech-service.site/image1.jpg', width: 300, height: 200 },
+              { url: 'https://tlou.images.wltech-service.site/image2.jpg', width: 400, height: 300 }
             ],
             author: expect.objectContaining({
               username: testUser.username
@@ -92,7 +92,7 @@ describe('Posts Routes Test', () => {
         content: '测试帖子内容',
         images: [
           'oldformat.jpg',  // 旧格式：直接URL字符串
-          { url: 'https://tlou.images.wltech-service.site/newformat.jpg', name: 'newformat.jpg' }  // 新格式：对象
+          { url: 'https://tlou.images.wltech-service.site/newformat.jpg', width: 320, height: 240 }  // 新格式：对象
         ],
         openid: testUser.openid
       };
@@ -110,7 +110,7 @@ describe('Posts Routes Test', () => {
             content: '测试帖子内容',
             images: [
               'oldformat.jpg',
-              'https://tlou.images.wltech-service.site/newformat.jpg'
+              { url: 'https://tlou.images.wltech-service.site/newformat.jpg', width: 320, height: 240 }
             ],
             author: expect.objectContaining({
               username: testUser.username
@@ -209,6 +209,69 @@ describe('Posts Routes Test', () => {
         message: '缺少openid参数'
       });
     });
+
+    test('should return 400 when image object is missing required fields', async () => {
+      const postData = {
+        circleId: testCircle._id.toString(),
+        content: '测试帖子内容',
+        images: [
+          { url: 'https://example.com/image.jpg' }  // 缺少width和height
+        ],
+        openid: testUser.openid
+      };
+
+      const response = await request(app)
+        .post('/api/posts')
+        .send(postData)
+        .expect(400);
+
+      expect(response.body).toEqual({
+        status: 'fail',
+        message: expect.stringContaining('图片对象必须包含有效的width字段')
+      });
+    });
+
+    test('should return 400 when image object has invalid url', async () => {
+      const postData = {
+        circleId: testCircle._id.toString(),
+        content: '测试帖子内容',
+        images: [
+          { url: '', width: 100, height: 100 }  // 空URL
+        ],
+        openid: testUser.openid
+      };
+
+      const response = await request(app)
+        .post('/api/posts')
+        .send(postData)
+        .expect(400);
+
+      expect(response.body).toEqual({
+        status: 'fail',
+        message: expect.stringContaining('图片对象必须包含有效的url字段')
+      });
+    });
+
+    test('should return 400 when image object has negative dimensions', async () => {
+      const postData = {
+        circleId: testCircle._id.toString(),
+        content: '测试帖子内容',
+        images: [
+          { url: 'https://example.com/image.jpg', width: -100, height: 100 }  // 负数宽度
+        ],
+        openid: testUser.openid
+      };
+
+      const response = await request(app)
+        .post('/api/posts')
+        .send(postData)
+        .expect(400);
+
+      expect(response.body).toEqual({
+        status: 'fail',
+        message: expect.stringContaining('图片对象必须包含有效的width字段')
+      });
+    });
   });
 
   describe('GET /api/posts', () => {
@@ -290,6 +353,39 @@ describe('Posts Routes Test', () => {
         message: '无权查看此朋友圈的帖子'
       });
     });
+
+    test('should return posts with likedUsers information', async () => {
+      // 创建额外的测试用户
+      const liker1 = await createTestUser();
+      const liker2 = await createTestUser();
+      
+      // 创建有点赞的帖子
+      const postWithLikes = await createTestPost({ content: '有点赞的帖子' }, testUser, testCircle);
+      await postWithLikes.updateOne({
+        $addToSet: { likes: [liker1._id, liker2._id] }
+      });
+
+      const response = await request(app)
+        .get('/api/posts')
+        .query({ 
+          circleId: testCircle._id.toString(),
+          openid: testUser.openid 
+        })
+        .expect(200);
+
+      expect(response.body.success).toBe(true);
+      
+      // 查找有点赞的帖子
+      const postWithLikesData = response.body.data.posts.find(
+        post => post.content === '有点赞的帖子'
+      );
+      
+      expect(postWithLikesData).toBeDefined();
+      expect(postWithLikesData.likedUsers).toBeDefined();
+      expect(postWithLikesData.likedUsers).toHaveLength(2);
+      expect(postWithLikesData.likedUsers[0]).toHaveProperty('username');
+      expect(postWithLikesData.likedUsers[0]).toHaveProperty('avatar');
+    });
   });
 
   describe('POST /api/posts/:id/like', () => {
@@ -302,7 +398,14 @@ describe('Posts Routes Test', () => {
       expect(response.body).toEqual({
         success: true,
         message: '点赞成功',
-        data: { liked: true }
+        data: { 
+          liked: true,
+          likedUsers: [{
+            _id: testUser._id.toString(),
+            username: testUser.username,
+            avatar: testUser.avatar
+          }]
+        }
       });
     });
 
@@ -320,7 +423,10 @@ describe('Posts Routes Test', () => {
       expect(response.body).toEqual({
         success: true,
         message: '取消点赞成功',
-        data: { liked: false }
+        data: { 
+          liked: false,
+          likedUsers: [] // 取消点赞后，点赞用户列表为空
+        }
       });
     });
 
@@ -353,12 +459,12 @@ describe('Posts Routes Test', () => {
     });
 
     test('should delete post with images and trigger qiniu cleanup', async () => {
-      // 创建带有图片的测试帖子
+      // 创建带有图片的测试帖子（混合格式）
       const postWithImages = await createTestPost({
         content: '带图片的帖子',
         images: [
-          'https://tlou.images.wltech-service.site/test1.jpg',
-          'https://tlou.images.wltech-service.site/test2.jpg'
+          'https://tlou.images.wltech-service.site/test1.jpg',  // 旧格式
+          { url: 'https://tlou.images.wltech-service.site/test2.jpg', width: 300, height: 200 }  // 新格式
         ]
       }, testUser, testCircle);
 

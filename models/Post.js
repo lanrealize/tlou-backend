@@ -15,7 +15,29 @@ const postSchema = new mongoose.Schema({
     type: String,
     default: ''
   },
-  images: [String],
+  images: {
+    type: [mongoose.Schema.Types.Mixed],
+    validate: {
+      validator: function(arr) {
+        if (!Array.isArray(arr)) return true; // 允许空值
+        return arr.every(value => {
+          // 支持字符串（旧格式）或对象（新格式）
+          if (typeof value === 'string') {
+            return true; // 兼容旧数据：字符串URL
+          }
+          if (typeof value === 'object' && value !== null) {
+            // 新格式：包含url, width, height的对象
+            return typeof value.url === 'string' && 
+                   typeof value.width === 'number' && 
+                   typeof value.height === 'number';
+          }
+          return false;
+        });
+      },
+      message: 'images数组元素必须是字符串URL或包含{url, width, height}的对象'
+    },
+    default: []
+  },
   likes: [{
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User'

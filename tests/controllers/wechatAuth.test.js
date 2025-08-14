@@ -119,7 +119,8 @@ describe('WeChat Auth Controller Test', () => {
             _id: existingUser._id,
             openid: 'test_openid_123',
             username: 'test_user',
-            avatar: 'https://example.com/avatar.jpg'
+            avatar: 'https://example.com/avatar.jpg',
+            isAdmin: false
           }
         }
       });
@@ -198,6 +199,7 @@ describe('WeChat Auth Controller Test', () => {
       expect(response.data.user.openid).toBe('test_openid_123');
       expect(response.data.user.username).toBe('new_user');
       expect(response.data.user.avatar).toBe('https://example.com/avatar.jpg');
+      expect(response.data.user.isAdmin).toBe(false);
 
       // 验证用户是否被创建
       const createdUser = await User.findOne({ openid: 'test_openid_123' });

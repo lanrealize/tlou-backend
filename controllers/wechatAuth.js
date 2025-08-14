@@ -80,7 +80,8 @@ async function getUserInfo(req, res) {
           _id: user._id,
           openid: user.openid,
           username: user.username,
-          avatar: user.avatar
+          avatar: user.avatar,
+          isAdmin: user.isAdmin
         }
       }
     });
@@ -132,7 +133,8 @@ async function registerUser(req, res) {
           _id: newUser._id,
           openid: newUser.openid,
           username: newUser.username,
-          avatar: newUser.avatar
+          avatar: newUser.avatar,
+          isAdmin: newUser.isAdmin
         }
       }
     });

@@ -61,6 +61,31 @@ router.post('/', checkOpenid, [
     .optional()
     .isArray()
     .withMessage('图片必须是数组格式')
+    .custom((images) => {
+      if (!images) return true; // 可选字段
+      
+      // 验证数组中每个元素的格式
+      for (const img of images) {
+        if (typeof img === 'string') {
+          continue; // 兼容旧格式：字符串URL
+        }
+        if (typeof img === 'object' && img !== null) {
+          // 新格式：验证必需字段
+          if (typeof img.url !== 'string' || !img.url.trim()) {
+            throw new Error('图片对象必须包含有效的url字段');
+          }
+          if (typeof img.width !== 'number' || img.width <= 0) {
+            throw new Error('图片对象必须包含有效的width字段（正数）');
+          }
+          if (typeof img.height !== 'number' || img.height <= 0) {
+            throw new Error('图片对象必须包含有效的height字段（正数）');
+          }
+        } else {
+          throw new Error('图片元素必须是字符串URL或包含{url, width, height}的对象');
+        }
+      }
+      return true;
+    })
 ], catchAsync(async (req, res) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
@@ -68,14 +93,6 @@ router.post('/', checkOpenid, [
   }
 
   const { circleId, content, images } = req.body;
-
-  // 🆕 添加这几行：兼容前端新格式，但仍然只存储URL
-  const imageUrls = images ? images.map(img => {
-    if (typeof img === 'string') {
-      return img; // 旧格式：直接是URL
-    }
-    return img.url; // 新格式：提取URL
-  }) : [];
 
   // 检查朋友圈是否存在
   const circle = await Circle.findById(circleId);
@@ -92,7 +109,7 @@ router.post('/', checkOpenid, [
     author: req.user._id,
     circle: circleId,
     content,
-    images: imageUrls  // 仍然存储URL数组
+    images: images || []  // 直接存储原始images数组（支持对象数组和字符串数组）
   });
 
   // 填充作者信息
@@ -134,12 +151,13 @@ router.get('/', checkOpenid, [
     throw new AppError('无权查看此朋友圈的帖子', 403);
   }
 
-  // 获取该朋友圈的所有帖子
+  // 获取该朋友圈的所有帖子（同时填充点赞用户信息）
   const posts = await Post.find({ circle: circleId })
     .populate('author', 'username avatar')
+    .populate('likes', 'username avatar') // 🆕 添加点赞用户信息填充
     .sort({ createdAt: -1 });
 
-  // 收集所有需要的用户ID
+  // 收集所有需要的用户ID（用于评论）
   const userIds = new Set();
   posts.forEach(post => {
     post.comments.forEach(comment => {
@@ -162,6 +180,9 @@ router.get('/', checkOpenid, [
   // 填充用户信息
   const postsWithPopulatedComments = posts.map(post => {
     const postObj = post.toObject();
+    
+    // 🆕 添加 likedUsers 字段，保持向后兼容
+    postObj.likedUsers = postObj.likes || [];
     
     if (postObj.comments && postObj.comments.length > 0) {
       postObj.comments = postObj.comments.map(comment => ({
@@ -219,10 +240,17 @@ router.post('/:id/like', checkOpenid, catchAsync(async (req, res) => {
     }
   }
 
+  // 🆕 获取更新后的完整点赞用户信息
+  const updatedPost = await Post.findById(postId, 'likes')
+    .populate('likes', 'username avatar');
+
   res.json({
     success: true,
     message: isLiked ? '取消点赞成功' : '点赞成功',
-    data: { liked: !isLiked }
+    data: { 
+      liked: !isLiked,
+      likedUsers: updatedPost.likes // 🆕 返回完整的点赞用户信息
+    }
   });
 }));
 
@@ -241,9 +269,16 @@ router.delete('/:id', checkOpenid, catchAsync(async (req, res) => {
     throw new AppError('帖子不存在或无权限删除', 404);
   }
 
-  // 🆕 添加这行：异步删除七牛云文件
+  // 🆕 添加这行：异步删除七牛云文件，支持新旧格式
   if (post.images && post.images.length > 0) {
-    setImmediate(() => deleteQiniuFiles(post.images));
+    // 提取URL数组（兼容新旧格式）
+    const imageUrls = post.images.map(img => {
+      if (typeof img === 'string') {
+        return img; // 旧格式：直接是URL
+      }
+      return img.url; // 新格式：提取URL
+    });
+    setImmediate(() => deleteQiniuFiles(imageUrls));
   }
 
   // 原有删除逻辑不变

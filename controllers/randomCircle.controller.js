@@ -1,4 +1,5 @@
 const Circle = require('../models/Circle');
+const Post = require('../models/Post');
 const { catchAsync, AppError } = require('../utils/errorHandler');
 
 /**
@@ -33,11 +34,17 @@ function cleanupExpiredHistory() {
  * - excludeVisited: boolean，是否排除已访问的朋友圈（默认true）
  * - resetHistory: boolean，是否重置访问历史（默认false）
  * 
+ * 返回数据包含:
+ * - circle: 朋友圈基本信息
+ * - latestPost: 该朋友圈的最新帖子（如果有的话）
+ * - randomInfo: 随机选择相关统计信息
+ * 
  * 性能优化特点：
  * 1. 使用索引优化的查询 { isPublic: true }
  * 2. 轻量级随机算法，避免大量数据加载
  * 3. 内存中维护访问历史，减少数据库查询
  * 4. 自动清理过期历史记录
+ * 5. 🆕 一次请求同时获取朋友圈和最新帖子，减少网络往返
  */
 async function getRandomPublicCircle(req, res) {
   try {
@@ -96,6 +103,17 @@ async function getRandomPublicCircle(req, res) {
             .lean();
 
           if (randomCircle) {
+            // 🆕 查询该朋友圈的最新帖子
+            let latestPost = null;
+            try {
+              latestPost = await Post.findOne({ circle: randomCircle._id })
+                .populate('author', 'username avatar')
+                .sort({ createdAt: -1 })
+                .lean();
+            } catch (error) {
+              console.warn('⚠️ 查询最新帖子失败:', error.message);
+            }
+
             // 初始化新的访问历史
             userVisitHistory.set(userId, {
               visitedIds: new Set([randomCircle._id.toString()]),
@@ -106,7 +124,10 @@ async function getRandomPublicCircle(req, res) {
               success: true,
               message: '获取随机朋友圈成功（已重置访问历史）',
               data: {
-                circle: randomCircle,
+                circle: {
+                  ...randomCircle,
+                  latestPost: latestPost  // 🆕 添加最新帖子
+                },
                 isHistoryReset: true,
                 totalAvailable: totalPublicCount,
                 visitedCount: 1
@@ -145,6 +166,18 @@ async function getRandomPublicCircle(req, res) {
       throw new AppError('获取随机朋友圈失败', 500);
     }
 
+    // 🆕 查询该朋友圈的最新帖子
+    let latestPost = null;
+    try {
+      latestPost = await Post.findOne({ circle: randomCircle._id })
+        .populate('author', 'username avatar')
+        .sort({ createdAt: -1 })
+        .lean();
+    } catch (error) {
+      console.warn('⚠️ 查询最新帖子失败:', error.message);
+      // 不抛出错误，继续返回朋友圈信息，只是没有最新帖子
+    }
+
     // 更新用户访问历史
     if (shouldExcludeVisited && userId) {
       if (!userHistory) {
@@ -175,7 +208,8 @@ async function getRandomPublicCircle(req, res) {
         memberCount: randomCircle.members ? randomCircle.members.length : 0,
         stats: randomCircle.stats,
         createdAt: randomCircle.createdAt,
-        latestActivityTime: randomCircle.latestActivityTime
+        latestActivityTime: randomCircle.latestActivityTime,
+        latestPost: latestPost  // 🆕 添加最新帖子
       },
       randomInfo: {
         totalAvailable: totalCount,
@@ -188,7 +222,8 @@ async function getRandomPublicCircle(req, res) {
       circleId: randomCircle._id,
       circleName: randomCircle.name,
       totalAvailable: totalCount,
-      visitedCount: userHistory ? userHistory.visitedIds.size : 0
+      visitedCount: userHistory ? userHistory.visitedIds.size : 0,
+      hasLatestPost: !!latestPost
     });
 
     res.json({
