@@ -178,18 +178,26 @@ describe('Posts Routes Test', () => {
       });
     });
 
-    test('should return 422 when image content check fails', async () => {
-      // Mock图片审核失败
+    test('should return 422 with violation details when image content check fails', async () => {
+      // Mock图片审核：第一张违规，第二张通过
       const { checkImageContent } = require('../../services/imageCheck.service');
-      checkImageContent.mockResolvedValueOnce({
-        errcode: 87014,
-        errmsg: '内容含有违法违规内容'
-      });
+      checkImageContent
+        .mockResolvedValueOnce({
+          errcode: 87014,
+          errmsg: '内容含有违法违规内容'
+        })
+        .mockResolvedValueOnce({
+          errcode: 0,
+          errmsg: 'ok'
+        });
 
       const postData = {
         circleId: testCircle._id.toString(),
-        content: '测试违规图片帖子',
-        images: ['https://example.com/bad-image.jpg'],
+        content: '测试混合图片帖子',
+        images: [
+          'https://example.com/bad-image.jpg',
+          'https://example.com/good-image.jpg'
+        ],
         openid: testUser.openid
       };
 
@@ -198,16 +206,55 @@ describe('Posts Routes Test', () => {
         .send(postData)
         .expect(422);
 
-      expect(response.body).toEqual({
-        status: 'fail',
-        message: expect.stringContaining('图片内容审核未通过')
+      // 验证响应包含详细的违规信息
+      expect(response.body.status).toBe('fail');
+      expect(response.body.message).toContain('检测到违规图片');
+      expect(response.body.violationDetails).toBeDefined();
+      expect(response.body.violationDetails.violatedImages).toHaveLength(1);
+      expect(response.body.violationDetails.violatedImages[0]).toEqual({
+        index: 1,
+        url: 'https://example.com/bad-image.jpg',
+        reason: '内容含有违法违规内容',
+        code: 87014
       });
+      expect(response.body.violationDetails.validImages).toHaveLength(1);
+      expect(response.body.violationDetails.totalImages).toBe(2);
+      expect(response.body.violationDetails.timeoutMinutes).toBe(10);
 
-      // 验证删除函数被调用
+      // 验证违规图片立即删除函数被调用
       const { deleteQiniuFiles } = require('../../utils/qiniuUtils');
-      // 给异步操作一点时间
       await new Promise(resolve => setTimeout(resolve, 10));
       expect(deleteQiniuFiles).toHaveBeenCalledWith('https://example.com/bad-image.jpg');
+    });
+
+    test('should create post successfully when all images pass content check', async () => {
+      // Mock所有图片审核通过
+      const { checkImageContent } = require('../../services/imageCheck.service');
+      checkImageContent.mockResolvedValue({
+        errcode: 0,
+        errmsg: 'ok'
+      });
+
+      const postData = {
+        circleId: testCircle._id.toString(),
+        content: '测试全部合规图片帖子',
+        images: [
+          'https://example.com/good-image1.jpg',
+          'https://example.com/good-image2.jpg'
+        ],
+        openid: testUser.openid
+      };
+
+      const response = await request(app)
+        .post('/api/posts')
+        .send(postData)
+        .expect(201);
+
+      // 验证响应正常
+      expect(response.body.success).toBe(true);
+      expect(response.body.message).toBe('发布成功');
+      expect(response.body.data.post.images).toHaveLength(2);
+      expect(response.body.violationDetails).toBeUndefined();
     });
 
     test('should return 403 when user is not circle member', async () => {
@@ -284,7 +331,7 @@ describe('Posts Routes Test', () => {
 
       expect(response.body).toEqual({
         status: 'fail',
-        message: '图片URL不能为空'
+        message: '图片检查失败: 第1张图片URL为空'
       });
     });
 

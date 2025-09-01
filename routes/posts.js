@@ -3,7 +3,7 @@ const { body, query, validationResult } = require('express-validator');
 const Post = require('../models/Post');
 const Circle = require('../models/Circle');
 const { checkOpenid } = require('../middleware/openidAuth');
-const { checkImagesMiddleware } = require('../middleware/imageCheck');
+const { checkImagesMiddleware, cancelImageDeletion } = require('../middleware/imageCheck');
 const { catchAsync, AppError, globalErrorHandler } = require('../utils/errorHandler');
 const User = require('../models/User'); // Added for comments
 const mongoose = require('mongoose'); // Added for mongoose.Types.ObjectId
@@ -87,6 +87,11 @@ router.post('/', checkOpenid, checkImagesMiddleware, [
 
   // 更新朋友圈活动时间
   updateCircleActivity(circleId);
+
+  // 如果存在删除任务ID，取消延迟删除
+  if (req.imageDeletionId) {
+    cancelImageDeletion(req.imageDeletionId);
+  }
 
   res.status(201).json({
     success: true,
