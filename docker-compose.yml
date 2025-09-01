@@ -4,6 +4,6 @@ services:
   tlou-backend:
     build: .
     ports:
-      - "3000:3000"
+      - "3001:3001"
     restart: unless-stopped
     # 使用打包在镜像中的.env文件，无需额外环境变量配置
