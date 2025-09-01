@@ -3,51 +3,19 @@ const { body, query, validationResult } = require('express-validator');
 const Post = require('../models/Post');
 const Circle = require('../models/Circle');
 const { checkOpenid } = require('../middleware/openidAuth');
+const { checkImagesMiddleware } = require('../middleware/imageCheck');
 const { catchAsync, AppError, globalErrorHandler } = require('../utils/errorHandler');
 const User = require('../models/User'); // Added for comments
 const mongoose = require('mongoose'); // Added for mongoose.Types.ObjectId
-const qiniu = require('qiniu'); // 🆕 添加这行
-const { updateCircleActivity } = require('../utils/circleUtils'); // 添加朋友圈活动更新工具
+const { updateCircleActivity } = require('../utils/circleUtils');
+const { deleteQiniuFiles } = require('../utils/qiniuUtils');
 
 const router = express.Router();
 
-// 🆕 添加这个简单的删除函数
-async function deleteQiniuFiles(imageUrls) {
-  if (!imageUrls || imageUrls.length === 0) return;
-  
-  // 从环境变量获取密钥（如果没有就跳过删除）
-  const accessKey = process.env.QINIU_ACCESS_KEY;
-  const secretKey = process.env.QINIU_SECRET_KEY;
-  
-  if (!accessKey || !secretKey) {
-    console.warn('⚠️ 七牛云密钥未配置，跳过文件删除');
-    return;
-  }
 
-  const mac = new qiniu.auth.digest.Mac(accessKey, secretKey);
-  const bucketManager = new qiniu.rs.BucketManager(mac);
-  const bucket = 'tlou';
-
-  for (const url of imageUrls) {
-    try {
-      // 从URL提取key: https://domain.com/path/file.jpg -> path/file.jpg
-      const key = new URL(url).pathname.substring(1);
-      
-      bucketManager.delete(bucket, key, (err, respBody, respInfo) => {
-        if (err) {
-          console.error('❌ 文件删除失败:', key, err);
-        } else if (respInfo.statusCode === 200) {
-          console.log('✅ 文件删除成功:', key);
-        }
-      });
-    } catch (error) {
-      console.warn('⚠️ URL解析失败:', url);
-    }
-  }
-}
 
 // 创建帖子
-router.post('/', checkOpenid, [
+router.post('/', checkOpenid, checkImagesMiddleware, [
   body('circleId')
     .notEmpty()
     .withMessage('朋友圈ID不能为空')
@@ -105,11 +73,13 @@ router.post('/', checkOpenid, [
     throw new AppError('您不是此朋友圈的成员', 403);
   }
 
+  // 图片内容检查已经在中间件中完成
+
   const post = await Post.create({
     author: req.user._id,
     circle: circleId,
     content,
-    images: images || []  // 直接存储原始images数组（支持对象数组和字符串数组）
+    images: images || []
   });
 
   // 填充作者信息

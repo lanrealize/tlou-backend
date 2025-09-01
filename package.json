@@ -31,6 +31,7 @@
     "helmet": "^7.0.0",
     "mongoose": "^7.5.0",
     "qiniu": "^7.14.0",
+    "request": "^2.88.2",
     "uuid": "^11.1.0"
   },
   "devDependencies": {

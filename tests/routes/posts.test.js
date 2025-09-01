@@ -3,6 +3,10 @@ const express = require('express');
 const { createTestUser, createTestCircle, createTestPost } = require('../helpers/testUtils');
 const { globalErrorHandler } = require('../../utils/errorHandler');
 
+// Mock图片检查服务和七牛云工具
+jest.mock('../../services/imageCheck.service', () => require('../__mocks__/imageCheck.service'));
+jest.mock('../../utils/qiniuUtils', () => require('../__mocks__/qiniuUtils'));
+
 // 创建测试应用
 const app = express();
 app.use(express.json());
@@ -174,6 +178,38 @@ describe('Posts Routes Test', () => {
       });
     });
 
+    test('should return 422 when image content check fails', async () => {
+      // Mock图片审核失败
+      const { checkImageContent } = require('../../services/imageCheck.service');
+      checkImageContent.mockResolvedValueOnce({
+        errcode: 87014,
+        errmsg: '内容含有违法违规内容'
+      });
+
+      const postData = {
+        circleId: testCircle._id.toString(),
+        content: '测试违规图片帖子',
+        images: ['https://example.com/bad-image.jpg'],
+        openid: testUser.openid
+      };
+
+      const response = await request(app)
+        .post('/api/posts')
+        .send(postData)
+        .expect(422);
+
+      expect(response.body).toEqual({
+        status: 'fail',
+        message: expect.stringContaining('图片内容审核未通过')
+      });
+
+      // 验证删除函数被调用
+      const { deleteQiniuFiles } = require('../../utils/qiniuUtils');
+      // 给异步操作一点时间
+      await new Promise(resolve => setTimeout(resolve, 10));
+      expect(deleteQiniuFiles).toHaveBeenCalledWith('https://example.com/bad-image.jpg');
+    });
+
     test('should return 403 when user is not circle member', async () => {
       const nonMember = await createTestUser();
       const postData = {
@@ -248,7 +284,7 @@ describe('Posts Routes Test', () => {
 
       expect(response.body).toEqual({
         status: 'fail',
-        message: expect.stringContaining('图片对象必须包含有效的url字段')
+        message: '图片URL不能为空'
       });
     });
 
@@ -505,14 +541,12 @@ describe('Posts Routes Test', () => {
       console.warn = originalConsoleWarn;
       console.error = originalConsoleError;
 
-      // 验证七牛云删除相关的日志被记录（成功或失败都可以，取决于环境配置）
-      const hasQiniuLogs = mockLogs.some(log => 
-        log.args.some(arg => 
-          typeof arg === 'string' && 
-          (arg.includes('文件删除') || arg.includes('七牛云密钥'))
-        )
-      );
-      expect(hasQiniuLogs).toBe(true);
+      // 验证七牛云删除函数被调用
+      const { deleteQiniuFiles } = require('../../utils/qiniuUtils');
+      expect(deleteQiniuFiles).toHaveBeenCalledWith([
+        'https://tlou.images.wltech-service.site/test1.jpg',
+        'https://tlou.images.wltech-service.site/test2.jpg'
+      ]);
     });
 
     test('should return 404 when post does not exist', async () => {
