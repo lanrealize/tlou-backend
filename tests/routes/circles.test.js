@@ -2,6 +2,8 @@ const request = require('supertest');
 const express = require('express');
 const { createTestUser, createTestCircle, createTestPost } = require('../helpers/testUtils');
 const { globalErrorHandler } = require('../../utils/errorHandler');
+const Circle = require('../../models/Circle');
+const Post = require('../../models/Post');
 
 // 创建测试应用
 const app = express();
@@ -292,6 +294,101 @@ describe('Circles Routes Test', () => {
     test('should return 401 when openid is missing', async () => {
       const response = await request(app)
         .delete(`/api/circles/${testCircle._id}/leave`)
+        .expect(401);
+
+      expect(response.body).toEqual({
+        status: 'fail',
+        message: '缺少openid参数'
+      });
+    });
+  });
+
+  describe('DELETE /api/circles/:id', () => {
+    test('should allow creator to delete circle', async () => {
+      const response = await request(app)
+        .delete(`/api/circles/${testCircle._id}`)
+        .send({ openid: testUser.openid })
+        .expect(200);
+
+      expect(response.body).toEqual({
+        success: true,
+        message: '朋友圈已删除'
+      });
+
+      // 验证朋友圈确实被删除
+      const deletedCircle = await Circle.findById(testCircle._id);
+      expect(deletedCircle).toBeNull();
+    });
+
+    test('should cascade delete all posts in the circle', async () => {
+      // 创建一个新朋友圈和几个帖子
+      const circle = await Circle.create({
+        name: '测试删除朋友圈',
+        creator: testUser._id,
+        members: [testUser._id]
+      });
+
+      const post1 = await Post.create({
+        content: '测试帖子1',
+        author: testUser._id,
+        circle: circle._id
+      });
+
+      const post2 = await Post.create({
+        content: '测试帖子2',
+        author: testUser._id,
+        circle: circle._id
+      });
+
+      // 删除朋友圈
+      const response = await request(app)
+        .delete(`/api/circles/${circle._id}`)
+        .send({ openid: testUser.openid })
+        .expect(200);
+
+      expect(response.body).toEqual({
+        success: true,
+        message: '朋友圈已删除'
+      });
+
+      // 验证帖子也被删除
+      const deletedPost1 = await Post.findById(post1._id);
+      const deletedPost2 = await Post.findById(post2._id);
+      expect(deletedPost1).toBeNull();
+      expect(deletedPost2).toBeNull();
+    });
+
+    test('should return 404 when circle does not exist', async () => {
+      const fakeId = '507f1f77bcf86cd799439011';
+
+      const response = await request(app)
+        .delete(`/api/circles/${fakeId}`)
+        .send({ openid: testUser.openid })
+        .expect(404);
+
+      expect(response.body).toEqual({
+        status: 'fail',
+        message: '朋友圈不存在'
+      });
+    });
+
+    test('should return 403 when non-creator tries to delete circle', async () => {
+      const nonCreator = await createTestUser();
+
+      const response = await request(app)
+        .delete(`/api/circles/${testCircle._id}`)
+        .send({ openid: nonCreator.openid })
+        .expect(403);
+
+      expect(response.body).toEqual({
+        status: 'fail',
+        message: '只有创建者可以删除朋友圈'
+      });
+    });
+
+    test('should return 401 when openid is missing', async () => {
+      const response = await request(app)
+        .delete(`/api/circles/${testCircle._id}`)
         .expect(401);
 
       expect(response.body).toEqual({

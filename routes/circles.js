@@ -152,6 +152,31 @@ router.delete('/:id/leave', checkOpenid, catchAsync(async (req, res) => {
   });
 }));
 
+// 删除朋友圈（创建者专用）
+router.delete('/:id', checkOpenid, catchAsync(async (req, res) => {
+  const circle = await Circle.findById(req.params.id);
+
+  if (!circle) {
+    throw new AppError('朋友圈不存在', 404);
+  }
+
+  // 只有创建者可以删除朋友圈
+  if (!circle.isCreator(req.user._id)) {
+    throw new AppError('只有创建者可以删除朋友圈', 403);
+  }
+
+  // 级联删除该朋友圈下的所有帖子
+  await Post.deleteMany({ circle: req.params.id });
+
+  // 删除朋友圈
+  await Circle.findByIdAndDelete(req.params.id);
+
+  res.json({
+    success: true,
+    message: '朋友圈已删除'
+  });
+}));
+
 // 删除朋友圈成员（创建者专用）
 router.delete('/:id/members/:userId', checkOpenid, catchAsync(async (req, res) => {
   const circle = await Circle.findById(req.params.id);
