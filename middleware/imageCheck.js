@@ -41,8 +41,8 @@ async function checkImagesMiddleware(req, res, next) {
         if (result.errcode === 0) {
           validImages.push(image);
           console.log(`✅ 图片${i + 1}检查通过:`, imageUrl.substring(0, 50) + '...');
-        } else {
-          // 检查不通过 - 记录违规图片并立即删除
+        } else if (result.errcode === 87014) {
+          // 图片内容违规 - 记录违规图片并立即删除
           console.log(`❌ 图片${i + 1}违规:`, imageUrl.substring(0, 50) + '...', result.errmsg);
           violatedImages.push({
             index: i + 1,
@@ -53,15 +53,35 @@ async function checkImagesMiddleware(req, res, next) {
           
           // 立即删除违规图片
           setImmediate(() => deleteQiniuFiles(imageUrl));
+        } else {
+          // 这种情况不应该发生（service层应该已经reject了），但为了安全起见
+          throw new Error(`意外的检查结果 [errcode: ${result.errcode}]: ${result.errmsg}`);
         }
       } catch (error) {
-        // 处理检查过程中的错误
+        // 处理检查过程中的错误（这些是系统错误，不是图片内容问题）
+        console.error(`图片${i + 1}内容检查失败:`, error);
+        
         if (error.message === '图片不存在') {
           checkErrors.push(`第${i + 1}张图片不存在或无法访问`);
         } else if (error.message.includes('timeout')) {
           checkErrors.push(`第${i + 1}张图片下载超时`);
+        } else if (error.message.includes('微信图片检查API调用失败')) {
+          // 微信API调用失败
+          if (error.message.includes('40006')) {
+            // 文件过大（已自动重试3次压缩仍然失败）
+            checkErrors.push(`第${i + 1}张图片文件异常大，无法完成检查。建议使用其他图片`);
+          } else if (error.message.includes('45009')) {
+            // API频率限制
+            checkErrors.push(`系统繁忙，请稍后再试`);
+          } else if (error.message.includes('40001') || error.message.includes('41001')) {
+            // Token配置问题
+            checkErrors.push(`图片检查服务异常，请联系管理员`);
+          } else {
+            checkErrors.push(`图片检查失败: ${error.message.split(':')[1] || error.message}`);
+          }
+        } else if (error.message.includes('获取微信access_token失败')) {
+          checkErrors.push(`图片检查服务配置错误，请联系管理员`);
         } else {
-          console.error(`图片${i + 1}内容检查失败:`, error);
           checkErrors.push(`第${i + 1}张图片检查失败: ${error.message}`);
         }
       }

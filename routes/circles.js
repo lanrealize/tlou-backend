@@ -152,6 +152,44 @@ router.delete('/:id/leave', checkOpenid, catchAsync(async (req, res) => {
   });
 }));
 
+// 删除朋友圈成员（创建者专用）
+router.delete('/:id/members/:userId', checkOpenid, catchAsync(async (req, res) => {
+  const circle = await Circle.findById(req.params.id);
+  const memberToRemove = req.params.userId;
+
+  if (!circle) {
+    throw new AppError('朋友圈不存在', 404);
+  }
+
+  // 只有创建者可以删除成员
+  if (!circle.isCreator(req.user._id)) {
+    throw new AppError('只有朋友圈创建者可以删除成员', 403);
+  }
+
+  // 检查被删除的用户是否是成员
+  if (!circle.isMember(memberToRemove)) {
+    throw new AppError('该用户不是朋友圈成员', 400);
+  }
+
+  // 创建者不能删除自己
+  if (circle.creator.toString() === memberToRemove.toString()) {
+    throw new AppError('创建者不能删除自己', 400);
+  }
+
+  // 从朋友圈移除指定成员
+  await Circle.findByIdAndUpdate(req.params.id, {
+    $pull: { members: memberToRemove }
+  });
+
+  // 更新朋友圈活动时间
+  updateCircleActivity(req.params.id);
+
+  res.json({
+    success: true,
+    message: '成员已被移除'
+  });
+}));
+
 // 更新朋友圈设置
 router.patch('/:id/settings', checkOpenid, [
   body('name')

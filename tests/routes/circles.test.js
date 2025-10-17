@@ -301,6 +301,110 @@ describe('Circles Routes Test', () => {
     });
   });
 
+  describe('DELETE /api/circles/:id/members/:userId', () => {
+    test('should allow creator to remove member', async () => {
+      const member = await createTestUser();
+      
+      // 添加成员到朋友圈
+      await testCircle.updateOne({
+        $push: { members: member._id }
+      });
+
+      const response = await request(app)
+        .delete(`/api/circles/${testCircle._id}/members/${member._id}`)
+        .send({ openid: testUser.openid })
+        .expect(200);
+
+      expect(response.body).toEqual({
+        success: true,
+        message: '成员已被移除'
+      });
+
+      // 验证成员确实被移除
+      const updatedCircle = await testCircle.constructor.findById(testCircle._id);
+      expect(updatedCircle.members).not.toContain(member._id);
+    });
+
+    test('should return 404 when circle does not exist', async () => {
+      const fakeId = '507f1f77bcf86cd799439011';
+      const member = await createTestUser();
+
+      const response = await request(app)
+        .delete(`/api/circles/${fakeId}/members/${member._id}`)
+        .send({ openid: testUser.openid })
+        .expect(404);
+
+      expect(response.body).toEqual({
+        status: 'fail',
+        message: '朋友圈不存在'
+      });
+    });
+
+    test('should return 403 when non-creator tries to remove member', async () => {
+      const member = await createTestUser();
+      const nonCreator = await createTestUser();
+      
+      // 添加成员到朋友圈
+      await testCircle.updateOne({
+        $push: { members: [member._id, nonCreator._id] }
+      });
+
+      const response = await request(app)
+        .delete(`/api/circles/${testCircle._id}/members/${member._id}`)
+        .send({ openid: nonCreator.openid })
+        .expect(403);
+
+      expect(response.body).toEqual({
+        status: 'fail',
+        message: '只有朋友圈创建者可以删除成员'
+      });
+    });
+
+    test('should return 400 when user is not a member', async () => {
+      const nonMember = await createTestUser();
+
+      const response = await request(app)
+        .delete(`/api/circles/${testCircle._id}/members/${nonMember._id}`)
+        .send({ openid: testUser.openid })
+        .expect(400);
+
+      expect(response.body).toEqual({
+        status: 'fail',
+        message: '该用户不是朋友圈成员'
+      });
+    });
+
+    test('should return 400 when creator tries to remove themselves', async () => {
+      const response = await request(app)
+        .delete(`/api/circles/${testCircle._id}/members/${testUser._id}`)
+        .send({ openid: testUser.openid })
+        .expect(400);
+
+      expect(response.body).toEqual({
+        status: 'fail',
+        message: '创建者不能删除自己'
+      });
+    });
+
+    test('should return 401 when openid is missing', async () => {
+      const member = await createTestUser();
+      
+      // 添加成员到朋友圈
+      await testCircle.updateOne({
+        $push: { members: member._id }
+      });
+
+      const response = await request(app)
+        .delete(`/api/circles/${testCircle._id}/members/${member._id}`)
+        .expect(401);
+
+      expect(response.body).toEqual({
+        status: 'fail',
+        message: '缺少openid参数'
+      });
+    });
+  });
+
   describe('PATCH /api/circles/:id/settings', () => {
     test('should update circle settings successfully', async () => {
       const settingsData = {
