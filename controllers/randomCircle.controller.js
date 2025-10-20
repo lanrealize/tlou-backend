@@ -203,6 +203,7 @@ async function getRandomPublicCircle(req, res) {
         _id: randomCircle._id,
         name: randomCircle.name,
         description: randomCircle.description || '',
+        isPublic: randomCircle.isPublic,
         creator: randomCircle.creator,
         members: randomCircle.members,
         memberCount: randomCircle.members ? randomCircle.members.length : 0,

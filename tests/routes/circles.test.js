@@ -974,6 +974,80 @@ describe('Circles Routes Test', () => {
     });
   });
 
+  describe('GET /api/circles/random - Random Public Circle (for promotion)', () => {
+    beforeEach(async () => {
+      // 清理所有公开朋友圈，确保测试隔离
+      await Circle.deleteMany({ isPublic: true });
+    });
+
+    test('should allow guest users (without openid) to get random public circles', async () => {
+      // 创建几个公开朋友圈
+      await createTestCircle({
+        name: '公开朋友圈1',
+        isPublic: true
+      }, testUser);
+      
+      await createTestCircle({
+        name: '公开朋友圈2',
+        isPublic: true
+      }, testUser);
+
+      // 不提供openid
+      const response = await request(app)
+        .get('/api/circles/random')
+        .expect(200);
+
+      expect(response.body.success).toBe(true);
+      expect(response.body.data.circle).toBeDefined();
+      expect(response.body.data.circle._id).toBeDefined();
+      expect(response.body.data.circle.name).toBeDefined();
+      expect(response.body.data.circle.isPublic).toBe(true);
+      expect(response.body.data.circle.creator).toBeDefined();
+      expect(response.body.data.circle.creator.username).toBeDefined();
+      expect(response.body.data.randomInfo).toBeDefined();
+    });
+
+    test('should allow logged-in users to get random public circles', async () => {
+      // 创建一个公开朋友圈
+      await createTestCircle({
+        name: '公开朋友圈',
+        isPublic: true
+      }, testUser);
+
+      // 提供openid
+      const response = await request(app)
+        .get('/api/circles/random')
+        .query({ openid: testUser.openid })
+        .expect(200);
+
+      expect(response.body.success).toBe(true);
+      expect(response.body.data.circle).toBeDefined();
+      expect(response.body.data.circle.isPublic).toBe(true);
+    });
+
+    test('should return empty result when no public circles exist', async () => {
+      // 确保没有公开朋友圈
+      await Circle.deleteMany({ isPublic: true });
+      
+      const response = await request(app)
+        .get('/api/circles/random')
+        .expect(200);
+
+      expect(response.body).toEqual({
+        success: true,
+        message: '暂无可用的公开朋友圈',
+        data: {
+          circle: null,
+          randomInfo: {
+            totalAvailable: 0,
+            visitedCount: 0,
+            isHistoryReset: false
+          }
+        }
+      });
+    });
+  });
+
   // 更新 /my 接口测试以适配新的用户状态管理
   describe('GET /api/circles/my - Updated for New User Role Management', () => {
     test('should return circles where user has any role (creator, member, applier)', async () => {
