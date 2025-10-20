@@ -19,10 +19,6 @@ const circleSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User'
   }],
-  invitees: [{
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User'
-  }],
   isPublic: {
     type: Boolean,
     default: true
@@ -77,17 +73,11 @@ circleSchema.methods.isCreator = function(userId) {
   return this.creator.toString() === userId.toString();
 };
 
-// 检查用户是否被邀请
-circleSchema.methods.isInvitee = function(userId) {
-  return this.invitees.includes(userId);
-};
-
-// 检查用户是否有任何角色（creator, member, applier, invitee中的任意一种）
+// 检查用户是否有任何角色（creator, member, applier中的任意一种）
 circleSchema.methods.hasAnyRole = function(userId) {
   return this.isCreator(userId) || 
          this.isMember(userId) || 
-         this.isApplier(userId) || 
-         this.isInvitee(userId);
+         this.isApplier(userId);
 };
 
 // 更新成员统计

@@ -353,7 +353,7 @@ describe('Qiniu Routes Test', () => {
         .post('/api/qiniu/upload-token')
         .send('invalid json')
         .set('Content-Type', 'application/json')
-        .expect(500); // Express默认错误处理器返回500
+        .expect(400); // Express在接收到无效JSON时返回400
     });
   });
 });

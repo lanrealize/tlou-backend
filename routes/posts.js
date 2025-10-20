@@ -121,8 +121,8 @@ router.get('/', checkOpenid, [
     throw new AppError('朋友圈不存在', 404);
   }
 
-  // 权限检查：公开朋友圈所有人都能看，私密朋友圈只有creator、member、invitee能看（applier不能看）
-  if (!circle.isPublic && !(circle.isCreator(req.user._id) || circle.isMember(req.user._id) || circle.isInvitee(req.user._id))) {
+  // 权限检查：公开朋友圈所有人都能看，私密朋友圈只有creator、member、applier能看
+  if (!circle.isPublic && !(circle.isCreator(req.user._id) || circle.isMember(req.user._id) || circle.isApplier(req.user._id))) {
     throw new AppError('无权查看此朋友圈的帖子', 403);
   }
 

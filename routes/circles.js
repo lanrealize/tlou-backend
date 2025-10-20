@@ -47,19 +47,17 @@ router.post('/', checkOpenid, [
 
 // 获取用户的朋友圈列表
 router.get('/my', checkOpenid, catchAsync(async (req, res) => {
-  // 查询用户有任何角色的朋友圈（creator, member, applier, invitee）
+  // 查询用户有任何角色的朋友圈（creator, member, applier）
   const circles = await Circle.find({
     $or: [
       { creator: req.user._id },        // 用户是创建者
       { members: req.user._id },        // 用户是成员  
-      { appliers: req.user._id },       // 用户是申请者
-      { invitees: req.user._id }        // 用户是被邀请者
+      { appliers: req.user._id }        // 用户是申请者
     ]
   })
     .populate('creator', 'username avatar')
     .populate('members', 'username avatar')
     .populate('appliers', 'username avatar')
-    .populate('invitees', 'username avatar')
     .sort({ latestActivityTime: -1 }) // 按最新活动时间排序
     .lean(); // 返回普通对象，方便后续处理
 
@@ -411,160 +409,6 @@ router.get('/:id/appliers', checkOpenid, catchAsync(async (req, res) => {
   });
 }));
 
-// 邀请用户加入朋友圈
-router.post('/:id/invite', checkOpenid, [
-  body('userId')
-    .notEmpty()
-    .withMessage('用户ID不能为空')
-], catchAsync(async (req, res) => {
-  const errors = validationResult(req);
-  if (!errors.isEmpty()) {
-    throw new AppError('输入验证失败: ' + errors.array().map(e => e.msg).join(', '), 400);
-  }
-
-  const circle = await Circle.findById(req.params.id);
-  const { userId } = req.body;
-
-  if (!circle) {
-    throw new AppError('朋友圈不存在', 404);
-  }
-
-  // 检查权限：创建者或开启了成员邀请权限的成员可以邀请
-  if (!circle.isCreator(req.user._id) && 
-      (!circle.allowInvite || !circle.isMember(req.user._id))) {
-    throw new AppError('您没有权限邀请用户', 403);
-  }
-
-  // 检查被邀请用户是否存在
-  const invitedUser = await User.findById(userId);
-  if (!invitedUser) {
-    throw new AppError('被邀请用户不存在', 404);
-  }
-
-  // 检查用户是否已经有任何角色
-  if (circle.hasAnyRole(userId)) {
-    throw new AppError('该用户已经在朋友圈中或已被邀请/申请', 400);
-  }
-
-  // 添加到邀请列表
-  await Circle.findByIdAndUpdate(req.params.id, {
-    $push: { invitees: userId }
-  });
-
-  res.json({
-    success: true,
-    message: '邀请已发送'
-  });
-}));
-
-// 取消邀请（将用户从invitee移除）
-router.delete('/:id/invite/:userId', checkOpenid, catchAsync(async (req, res) => {
-  const circle = await Circle.findById(req.params.id);
-  const inviteeId = req.params.userId;
-
-  if (!circle) {
-    throw new AppError('朋友圈不存在', 404);
-  }
-
-  // 检查权限：只有创建者或邀请者可以取消邀请
-  if (!circle.isCreator(req.user._id)) {
-    throw new AppError('只有朋友圈创建者可以取消邀请', 403);
-  }
-
-  // 检查用户是否在邀请列表中
-  if (!circle.isInvitee(inviteeId)) {
-    throw new AppError('该用户未被邀请', 400);
-  }
-
-  // 从邀请列表中移除
-  await Circle.findByIdAndUpdate(req.params.id, {
-    $pull: { invitees: inviteeId }
-  });
-
-  res.json({
-    success: true,
-    message: '邀请已取消'
-  });
-}));
-
-// 接受邀请（将用户从invitees移动到members中）
-router.post('/:id/accept-invite', checkOpenid, catchAsync(async (req, res) => {
-  const circle = await Circle.findById(req.params.id);
-
-  if (!circle) {
-    throw new AppError('朋友圈不存在', 404);
-  }
-
-  // 检查用户是否被邀请
-  if (!circle.isInvitee(req.user._id)) {
-    throw new AppError('您未被邀请加入此朋友圈', 400);
-  }
-
-  // 检查用户是否已经是成员（防止重复操作）
-  if (circle.isMember(req.user._id)) {
-    throw new AppError('您已经是朋友圈成员', 400);
-  }
-
-  // 将用户从邀请列表移动到成员列表
-  await Circle.findByIdAndUpdate(req.params.id, {
-    $pull: { invitees: req.user._id },
-    $push: { members: req.user._id }
-  });
-
-  // 更新朋友圈活动时间
-  updateCircleActivity(req.params.id);
-
-  res.json({
-    success: true,
-    message: '成功加入朋友圈'
-  });
-}));
-
-// 拒绝邀请（将用户从invitees中移除）
-router.post('/:id/decline-invite', checkOpenid, catchAsync(async (req, res) => {
-  const circle = await Circle.findById(req.params.id);
-
-  if (!circle) {
-    throw new AppError('朋友圈不存在', 404);
-  }
-
-  // 检查用户是否被邀请
-  if (!circle.isInvitee(req.user._id)) {
-    throw new AppError('您未被邀请加入此朋友圈', 400);
-  }
-
-  // 从邀请列表中移除
-  await Circle.findByIdAndUpdate(req.params.id, {
-    $pull: { invitees: req.user._id }
-  });
-
-  res.json({
-    success: true,
-    message: '已拒绝邀请'
-  });
-}));
-
-// 获取邀请列表
-router.get('/:id/invitees', checkOpenid, catchAsync(async (req, res) => {
-  const circle = await Circle.findById(req.params.id).populate('invitees', 'username avatar');
-
-  if (!circle) {
-    throw new AppError('朋友圈不存在', 404);
-  }
-
-  // 只有创建者可以查看邀请列表
-  if (!circle.isCreator(req.user._id)) {
-    throw new AppError('只有朋友圈创建者可以查看邀请列表', 403);
-  }
-
-  res.json({
-    success: true,
-    data: {
-      invitees: circle.invitees
-    }
-  });
-}));
-
 // ========== 随机公开朋友圈接口 ==========
 // ✅ 重要：具体路由必须在通用路由/:id之前定义！
 
@@ -581,8 +425,7 @@ router.get('/:id', checkOpenid, catchAsync(async (req, res) => {
   const circle = await Circle.findById(circleId)
     .populate('creator', 'username avatar')           // 创建者信息
     .populate('members', 'username avatar')           // 成员信息  
-    .populate('appliers', 'username avatar')          // 申请者信息
-    .populate('invitees', 'username avatar');         // 被邀请者信息
+    .populate('appliers', 'username avatar');         // 申请者信息
 
   // 2. 检查朋友圈是否存在
   if (!circle) {
@@ -622,7 +465,6 @@ router.get('/:id', checkOpenid, catchAsync(async (req, res) => {
       creator: circle.creator,
       members: circle.members,
       appliers: circle.appliers,              // 创建者可以看到申请者
-      invitees: circle.invitees,              // 创建者可以看到被邀请者
       allowInvite: circle.allowInvite,
       allowPost: circle.allowPost,
       stats: circle.stats,
@@ -640,15 +482,14 @@ router.get('/:id', checkOpenid, catchAsync(async (req, res) => {
       creator: circle.creator,
       members: circle.members,
       appliers: [],                           // 普通成员看不到申请者
-      invitees: [],                           // 普通成员看不到被邀请者
       allowInvite: circle.allowInvite,
       allowPost: circle.allowPost,
       stats: circle.stats,
       createdAt: circle.createdAt,
       latestActivityTime: circle.latestActivityTime
     };
-  } else if (circle.isInvitee(userId) || circle.isApplier(userId)) {
-    // 4d. 被邀请者或申请者：返回基本信息，让他们了解朋友圈
+  } else if (circle.isApplier(userId)) {
+    // 4d. 申请者：返回基本信息，让他们了解朋友圈
     responseData = {
       _id: circle._id,
       name: circle.name,
@@ -657,7 +498,6 @@ router.get('/:id', checkOpenid, catchAsync(async (req, res) => {
       creator: circle.creator,
       members: circle.members,                // 可以看到成员列表
       appliers: [],                          // 看不到其他申请者
-      invitees: [],                          // 看不到其他被邀请者
       memberCount: circle.members ? circle.members.length : 0,
       createdAt: circle.createdAt,
       latestActivityTime: circle.latestActivityTime
