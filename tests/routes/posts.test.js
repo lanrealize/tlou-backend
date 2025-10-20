@@ -358,6 +358,49 @@ describe('Posts Routes Test', () => {
   });
 
   describe('GET /api/posts', () => {
+    test('should allow guest users to view posts in public circles', async () => {
+      const publicCircle = await createTestCircle({
+        name: '公开朋友圈',
+        isPublic: true
+      }, testUser);
+
+      await createTestPost({ content: '公开帖子1' }, testUser, publicCircle);
+      await createTestPost({ content: '公开帖子2' }, testUser, publicCircle);
+
+      // 不提供openid
+      const response = await request(app)
+        .get('/api/posts')
+        .query({ 
+          circleId: publicCircle._id.toString()
+        })
+        .expect(200);
+
+      expect(response.body.success).toBe(true);
+      expect(response.body.data.posts.length).toBeGreaterThanOrEqual(2);
+      expect(response.body.data.posts[0].content).toBeDefined();
+      expect(response.body.data.posts[0].author).toBeDefined();
+    });
+
+    test('should not allow guest users to view posts in private circles', async () => {
+      const privateCircle = await createTestCircle({
+        name: '私密朋友圈',
+        isPublic: false
+      }, testUser);
+
+      await createTestPost({ content: '私密帖子' }, testUser, privateCircle);
+
+      // 不提供openid
+      const response = await request(app)
+        .get('/api/posts')
+        .query({ 
+          circleId: privateCircle._id.toString()
+        })
+        .expect(403);
+
+      expect(response.body.status).toBe('fail');
+      expect(response.body.message).toBe('无权查看此朋友圈的帖子');
+    });
+
     test('should return posts for circle', async () => {
       // 创建更多帖子
       await createTestPost({ content: '帖子2' }, testUser, testCircle);

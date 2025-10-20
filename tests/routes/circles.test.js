@@ -974,6 +974,56 @@ describe('Circles Routes Test', () => {
     });
   });
 
+  describe('GET /api/circles/:id - View Single Circle (guest access)', () => {
+    test('should allow guest users to view public circles', async () => {
+      const publicCircle = await createTestCircle({
+        name: '公开朋友圈',
+        isPublic: true
+      }, testUser);
+
+      // 不提供openid
+      const response = await request(app)
+        .get(`/api/circles/${publicCircle._id}`)
+        .expect(200);
+
+      expect(response.body.success).toBe(true);
+      expect(response.body.data.circle._id).toBe(publicCircle._id.toString());
+      expect(response.body.data.circle.name).toBe('公开朋友圈');
+      expect(response.body.data.circle.isPublic).toBe(true);
+    });
+
+    test('should not allow guest users to view private circles', async () => {
+      const privateCircle = await createTestCircle({
+        name: '私密朋友圈',
+        isPublic: false
+      }, testUser);
+
+      // 不提供openid
+      const response = await request(app)
+        .get(`/api/circles/${privateCircle._id}`)
+        .expect(403);
+
+      expect(response.body.status).toBe('fail');
+      expect(response.body.message).toBe('私密朋友圈，无权访问');
+    });
+
+    test('should allow logged-in users to view public circles with more details', async () => {
+      const publicCircle = await createTestCircle({
+        name: '公开朋友圈',
+        isPublic: true
+      }, testUser);
+
+      // 提供openid
+      const response = await request(app)
+        .get(`/api/circles/${publicCircle._id}`)
+        .query({ openid: testUser.openid })
+        .expect(200);
+
+      expect(response.body.success).toBe(true);
+      expect(response.body.data.circle._id).toBe(publicCircle._id.toString());
+    });
+  });
+
   describe('GET /api/circles/random - Random Public Circle (for promotion)', () => {
     beforeEach(async () => {
       // 清理所有公开朋友圈，确保测试隔离

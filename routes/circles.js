@@ -416,9 +416,9 @@ router.get('/:id/appliers', checkOpenid, catchAsync(async (req, res) => {
 // 获取随机public朋友圈（支持未登录用户访问，用于推广）
 router.get('/random', optionalAuth, randomCircleController.getRandomPublicCircle);
 
-// 获取单个朋友圈详情（支持公开朋友圈和邀请访问）
+// 获取单个朋友圈详情（支持公开朋友圈和邀请访问，支持访客访问公开朋友圈）
 // ✅ 通用动态路由/:id必须放在最后，避免拦截具体路由
-router.get('/:id', checkOpenid, catchAsync(async (req, res) => {
+router.get('/:id', optionalAuth, catchAsync(async (req, res) => {
   const circleId = req.params.id;
   const userId = req.user?._id;
 
