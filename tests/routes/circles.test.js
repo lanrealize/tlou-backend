@@ -384,7 +384,7 @@ describe('Circles Routes Test', () => {
 
       expect(response.body).toEqual({
         status: 'fail',
-        message: '只有创建者可以删除朋友圈'
+        message: '只有朋友圈创建者可以执行此操作'
       });
     });
 
@@ -455,7 +455,7 @@ describe('Circles Routes Test', () => {
 
       expect(response.body).toEqual({
         status: 'fail',
-        message: '只有朋友圈创建者可以删除成员'
+        message: '只有朋友圈创建者可以执行此操作'
       });
     });
 
@@ -597,7 +597,7 @@ describe('Circles Routes Test', () => {
 
       expect(response.body).toEqual({
         status: 'fail',
-        message: '只有创建者可以修改朋友圈设置'
+        message: '只有朋友圈创建者可以执行此操作'
       });
     });
 
@@ -796,7 +796,7 @@ describe('Circles Routes Test', () => {
 
       expect(response.body).toEqual({
         status: 'fail',
-        message: '只有朋友圈创建者可以处理申请'
+        message: '只有朋友圈创建者可以执行此操作'
       });
     });
 
@@ -867,7 +867,7 @@ describe('Circles Routes Test', () => {
 
       expect(response.body).toEqual({
         status: 'fail',
-        message: '只有朋友圈创建者可以处理申请'
+        message: '只有朋友圈创建者可以执行此操作'
       });
     });
 
@@ -938,7 +938,7 @@ describe('Circles Routes Test', () => {
 
       expect(response.body).toEqual({
         status: 'fail',
-        message: '只有朋友圈创建者可以查看申请列表'
+        message: '只有朋友圈创建者可以执行此操作'
       });
     });
 

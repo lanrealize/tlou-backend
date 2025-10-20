@@ -60,24 +60,65 @@ circleSchema.index({ isPublic: 1, createdAt: -1 });
 
 // 检查用户是否是成员
 circleSchema.methods.isMember = function(userId) {
-  return this.members.includes(userId) || this.creator.toString() === userId.toString();
+  const userIdStr = userId.toString();
+  
+  // 检查是否是创建者
+  const creatorId = this.creator._id ? this.creator._id.toString() : this.creator.toString();
+  if (creatorId === userIdStr) {
+    return true;
+  }
+  
+  // 检查是否在成员列表中（兼容 populate 和未 populate 两种情况）
+  return this.members.some(member => {
+    const memberId = member._id ? member._id.toString() : member.toString();
+    return memberId === userIdStr;
+  });
 };
 
 // 检查用户是否已申请加入
 circleSchema.methods.isApplier = function(userId) {
-  return this.appliers.includes(userId);
+  const userIdStr = userId.toString();
+  
+  // 兼容 populate 和未 populate 两种情况
+  return this.appliers.some(applier => {
+    const applierId = applier._id ? applier._id.toString() : applier.toString();
+    return applierId === userIdStr;
+  });
 };
 
 // 检查用户是否是创建者
 circleSchema.methods.isCreator = function(userId) {
-  return this.creator.toString() === userId.toString();
+  const userIdStr = userId.toString();
+  // 兼容 populate 和未 populate 两种情况
+  const creatorId = this.creator._id ? this.creator._id.toString() : this.creator.toString();
+  return creatorId === userIdStr;
 };
 
 // 检查用户是否有任何角色（creator, member, applier中的任意一种）
+// 优化：避免重复检查 creator
 circleSchema.methods.hasAnyRole = function(userId) {
-  return this.isCreator(userId) || 
-         this.isMember(userId) || 
-         this.isApplier(userId);
+  const userIdStr = userId.toString();
+  
+  // 1. 先检查 creator（最快，单次比较）
+  const creatorId = this.creator._id ? this.creator._id.toString() : this.creator.toString();
+  if (creatorId === userIdStr) {
+    return true;
+  }
+  
+  // 2. 检查 members（需要遍历数组）
+  const isMember = this.members.some(member => {
+    const memberId = member._id ? member._id.toString() : member.toString();
+    return memberId === userIdStr;
+  });
+  if (isMember) {
+    return true;
+  }
+  
+  // 3. 最后检查 appliers（需要遍历数组）
+  return this.appliers.some(applier => {
+    const applierId = applier._id ? applier._id.toString() : applier.toString();
+    return applierId === userIdStr;
+  });
 };
 
 // 更新成员统计

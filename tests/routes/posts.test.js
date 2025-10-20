@@ -157,7 +157,7 @@ describe('Posts Routes Test', () => {
 
       expect(response.body).toEqual({
         status: 'fail',
-        message: '输入验证失败: 无效的朋友圈ID'
+        message: '无效的朋友圈ID'
       });
     });
 
@@ -545,7 +545,7 @@ describe('Posts Routes Test', () => {
 
       expect(response.body).toEqual({
         status: 'fail',
-        message: '帖子不存在'
+        message: '帖子不存在或无权限删除'
       });
     });
   });
@@ -715,7 +715,7 @@ describe('Posts Routes Test', () => {
 
       expect(response.body).toEqual({
         status: 'fail',
-        message: '帖子不存在'
+        message: '帖子不存在或无权限删除'
       });
     });
 
