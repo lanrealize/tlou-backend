@@ -13,7 +13,9 @@ app.use(express.json());
 
 // 模拟路由
 const postsRoutes = require('../../routes/posts');
+const publicRoutes = require('../../routes/public');
 app.use('/api/posts', postsRoutes);
+app.use('/api/public', publicRoutes);
 
 // 添加错误处理中间件
 app.use(globalErrorHandler);
@@ -358,47 +360,24 @@ describe('Posts Routes Test', () => {
   });
 
   describe('GET /api/posts', () => {
-    test('should allow guest users to view posts in public circles', async () => {
+    test('should require auth to view posts', async () => {
       const publicCircle = await createTestCircle({
         name: '公开朋友圈',
         isPublic: true
       }, testUser);
 
       await createTestPost({ content: '公开帖子1' }, testUser, publicCircle);
-      await createTestPost({ content: '公开帖子2' }, testUser, publicCircle);
 
-      // 不提供openid
+      // 不提供openid - 应该返回401
       const response = await request(app)
         .get('/api/posts')
         .query({ 
           circleId: publicCircle._id.toString()
         })
-        .expect(200);
-
-      expect(response.body.success).toBe(true);
-      expect(response.body.data.posts.length).toBeGreaterThanOrEqual(2);
-      expect(response.body.data.posts[0].content).toBeDefined();
-      expect(response.body.data.posts[0].author).toBeDefined();
-    });
-
-    test('should not allow guest users to view posts in private circles', async () => {
-      const privateCircle = await createTestCircle({
-        name: '私密朋友圈',
-        isPublic: false
-      }, testUser);
-
-      await createTestPost({ content: '私密帖子' }, testUser, privateCircle);
-
-      // 不提供openid
-      const response = await request(app)
-        .get('/api/posts')
-        .query({ 
-          circleId: privateCircle._id.toString()
-        })
-        .expect(403);
+        .expect(401);
 
       expect(response.body.status).toBe('fail');
-      expect(response.body.message).toBe('无权查看此朋友圈的帖子');
+      expect(response.body.message).toBe('缺少openid参数');
     });
 
     test('should return posts for circle', async () => {
@@ -839,6 +818,114 @@ describe('Posts Routes Test', () => {
         status: 'fail',
         message: '无权删除此评论'
       });
+    });
+  });
+
+  describe('GET /api/public/posts - Public Posts API (no auth required)', () => {
+    test('should allow anyone to view posts in public circles without auth', async () => {
+      const publicCircle = await createTestCircle({
+        name: '公开朋友圈',
+        isPublic: true
+      }, testUser);
+
+      await createTestPost({ content: '公开帖子1' }, testUser, publicCircle);
+      await createTestPost({ content: '公开帖子2' }, testUser, publicCircle);
+
+      // 不提供openid - 使用公开API
+      const response = await request(app)
+        .get('/api/public/posts')
+        .query({ 
+          circleId: publicCircle._id.toString()
+        })
+        .expect(200);
+
+      expect(response.body.success).toBe(true);
+      expect(response.body.data.posts.length).toBeGreaterThanOrEqual(2);
+      expect(response.body.data.posts[0].content).toBeDefined();
+      expect(response.body.data.posts[0].author).toBeDefined();
+      expect(response.body.data.pagination).toBeDefined();
+    });
+
+    test('should not allow access to private circle posts via public API', async () => {
+      const privateCircle = await createTestCircle({
+        name: '私密朋友圈',
+        isPublic: false
+      }, testUser);
+
+      await createTestPost({ content: '私密帖子' }, testUser, privateCircle);
+
+      // 尝试通过公开API访问私密朋友圈的帖子
+      const response = await request(app)
+        .get('/api/public/posts')
+        .query({ 
+          circleId: privateCircle._id.toString()
+        })
+        .expect(403);
+
+      expect(response.body.status).toBe('fail');
+      expect(response.body.message).toBe('无权访问私密朋友圈的帖子');
+    });
+
+    test('should support pagination', async () => {
+      const publicCircle = await createTestCircle({
+        name: '公开朋友圈',
+        isPublic: true
+      }, testUser);
+
+      // 创建多个帖子
+      for (let i = 1; i <= 15; i++) {
+        await createTestPost({ content: `帖子${i}` }, testUser, publicCircle);
+      }
+
+      // 第一页
+      const response1 = await request(app)
+        .get('/api/public/posts')
+        .query({ 
+          circleId: publicCircle._id.toString(),
+          page: 1,
+          limit: 10
+        })
+        .expect(200);
+
+      expect(response1.body.data.posts.length).toBe(10);
+      expect(response1.body.data.pagination.page).toBe(1);
+      expect(response1.body.data.pagination.totalPages).toBe(2);
+
+      // 第二页
+      const response2 = await request(app)
+        .get('/api/public/posts')
+        .query({ 
+          circleId: publicCircle._id.toString(),
+          page: 2,
+          limit: 10
+        })
+        .expect(200);
+
+      expect(response2.body.data.posts.length).toBe(5);
+      expect(response2.body.data.pagination.page).toBe(2);
+    });
+
+    test('should return 400 when circleId is missing', async () => {
+      const response = await request(app)
+        .get('/api/public/posts')
+        .expect(400);
+
+      expect(response.body.status).toBe('fail');
+      expect(response.body.message).toContain('朋友圈ID不能为空');
+    });
+
+    test('should return 404 when circle does not exist', async () => {
+      const fakeId = '507f1f77bcf86cd799439011';
+
+      const response = await request(app)
+        .get('/api/public/posts')
+        .query({ 
+          circleId: fakeId
+        })
+        .expect(404);
+
+      expect(response.body.status).toBe('fail');
+      expect(response.body.message).toBe('朋友圈不存在');
     });
   });
 }); 

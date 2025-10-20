@@ -3,7 +3,6 @@ const { body, validationResult } = require('express-validator');
 const Circle = require('../models/Circle');
 const User = require('../models/User');
 const { checkOpenid } = require('../middleware/openidAuth');
-const { optionalAuth } = require('../middleware/optionalAuth');
 const { catchAsync, AppError } = require('../utils/errorHandler');
 const Post = require('../models/Post'); // 需要引入Post模型
 const { updateCircleActivity } = require('../utils/circleUtils'); // 添加朋友圈活动更新工具
@@ -410,17 +409,11 @@ router.get('/:id/appliers', checkOpenid, catchAsync(async (req, res) => {
   });
 }));
 
-// ========== 随机公开朋友圈接口 ==========
-// ✅ 重要：具体路由必须在通用路由/:id之前定义！
-
-// 获取随机public朋友圈（支持未登录用户访问，用于推广）
-router.get('/random', optionalAuth, randomCircleController.getRandomPublicCircle);
-
-// 获取单个朋友圈详情（支持公开朋友圈和邀请访问，支持访客访问公开朋友圈）
+// 获取单个朋友圈详情（支持公开朋友圈和邀请访问）
 // ✅ 通用动态路由/:id必须放在最后，避免拦截具体路由
-router.get('/:id', optionalAuth, catchAsync(async (req, res) => {
+router.get('/:id', checkOpenid, catchAsync(async (req, res) => {
   const circleId = req.params.id;
-  const userId = req.user?._id;
+  const userId = req.user._id;
 
   // 1. 查询朋友圈基本信息，并填充相关用户数据
   const circle = await Circle.findById(circleId)
@@ -434,8 +427,8 @@ router.get('/:id', optionalAuth, catchAsync(async (req, res) => {
   }
 
   // 3. 权限检查：确定用户是否有权限查看此朋友圈
-  const hasPermission = circle.isPublic ||                    // 公开朋友圈
-                       (userId && circle.hasAnyRole(userId)); // 或者用户有任何角色
+  const hasPermission = circle.isPublic ||         // 公开朋友圈
+                       circle.hasAnyRole(userId);  // 或者用户有任何角色
 
   if (!hasPermission) {
     throw new AppError('私密朋友圈，无权访问', 403);
@@ -444,20 +437,8 @@ router.get('/:id', optionalAuth, catchAsync(async (req, res) => {
   // 4. 根据用户角色决定返回哪些信息
   let responseData;
 
-  if (!userId) {
-    // 4a. 未登录用户（只能访问公开朋友圈的基本信息）
-    responseData = {
-      _id: circle._id,
-      name: circle.name,
-      description: circle.description || '',
-      isPublic: circle.isPublic,
-      creator: circle.creator,
-      memberCount: circle.members ? circle.members.length : 0,
-      createdAt: circle.createdAt,
-      latestActivityTime: circle.latestActivityTime
-    };
-  } else if (circle.isCreator(userId)) {
-    // 4b. 创建者：返回完整管理信息
+  if (circle.isCreator(userId)) {
+    // 4a. 创建者：返回完整管理信息
     responseData = {
       _id: circle._id,
       name: circle.name,
@@ -474,7 +455,7 @@ router.get('/:id', optionalAuth, catchAsync(async (req, res) => {
       latestActivityTime: circle.latestActivityTime
     };
   } else if (circle.isMember(userId)) {
-    // 4c. 普通成员：返回成员信息，但不包含管理数据
+    // 4b. 普通成员：返回成员信息，但不包含管理数据
     responseData = {
       _id: circle._id,
       name: circle.name,
@@ -490,7 +471,7 @@ router.get('/:id', optionalAuth, catchAsync(async (req, res) => {
       latestActivityTime: circle.latestActivityTime
     };
   } else if (circle.isApplier(userId)) {
-    // 4d. 申请者：返回基本信息，让他们了解朋友圈
+    // 4c. 申请者：返回基本信息，让他们了解朋友圈
     responseData = {
       _id: circle._id,
       name: circle.name,
@@ -504,7 +485,7 @@ router.get('/:id', optionalAuth, catchAsync(async (req, res) => {
       latestActivityTime: circle.latestActivityTime
     };
   } else {
-    // 4e. 无关用户访问公开朋友圈
+    // 4d. 无关用户访问公开朋友圈
     responseData = {
       _id: circle._id,
       name: circle.name,

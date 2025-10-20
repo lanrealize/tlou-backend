@@ -40,8 +40,10 @@ describe('随机Public朋友圈控制器测试', () => {
 
     // 设置mock请求和响应对象
     mockReq = {
-      user: testUser1,
-      query: {}
+      user: testUser1,  // 保留以兼容旧测试
+      query: {
+        openid: testUser1.openid  // 添加 openid 让 controller 能识别用户
+      }
     };
 
     mockRes = {
@@ -149,6 +151,7 @@ describe('随机Public朋友圈控制器测试', () => {
 
     test('未登录用户也应该能访问随机public朋友圈', async () => {
       mockReq.user = null; // 模拟未登录状态
+      mockReq.query = {}; // 移除 openid，模拟未登录
 
       await randomCircleController.getRandomPublicCircle(mockReq, mockRes);
 

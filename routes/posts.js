@@ -3,7 +3,6 @@ const { body, query, validationResult } = require('express-validator');
 const Post = require('../models/Post');
 const Circle = require('../models/Circle');
 const { checkOpenid } = require('../middleware/openidAuth');
-const { optionalAuth } = require('../middleware/optionalAuth');
 const { checkImagesMiddleware, cancelImageDeletion } = require('../middleware/imageCheck');
 const { catchAsync, AppError, globalErrorHandler } = require('../utils/errorHandler');
 const User = require('../models/User'); // Added for comments
@@ -101,8 +100,8 @@ router.post('/', checkOpenid, checkImagesMiddleware, [
   });
 }));
 
-// 获取朋友圈的帖子列表（批量查询优化版本，支持访客浏览公开朋友圈）
-router.get('/', optionalAuth, [
+// 获取朋友圈的帖子列表（批量查询优化版本）
+router.get('/', checkOpenid, [
   query('circleId')
     .notEmpty()
     .withMessage('朋友圈ID不能为空')
@@ -115,7 +114,6 @@ router.get('/', optionalAuth, [
   }
 
   const { circleId } = req.query;
-  const userId = req.user?._id;
 
   // 检查朋友圈是否存在且用户有权限访问
   const circle = await Circle.findById(circleId);
@@ -123,12 +121,9 @@ router.get('/', optionalAuth, [
     throw new AppError('朋友圈不存在', 404);
   }
 
-  // 权限检查：公开朋友圈所有人都能看（包括未登录用户），私密朋友圈只有creator、member、applier能看
-  if (!circle.isPublic) {
-    // 私密朋友圈需要登录且有权限
-    if (!userId || !(circle.isCreator(userId) || circle.isMember(userId) || circle.isApplier(userId))) {
-      throw new AppError('无权查看此朋友圈的帖子', 403);
-    }
+  // 权限检查：公开朋友圈所有人都能看，私密朋友圈只有creator、member、applier能看
+  if (!circle.isPublic && !(circle.isCreator(req.user._id) || circle.isMember(req.user._id) || circle.isApplier(req.user._id))) {
+    throw new AppError('无权查看此朋友圈的帖子', 403);
   }
 
   // 获取该朋友圈的所有帖子（同时填充点赞用户信息）

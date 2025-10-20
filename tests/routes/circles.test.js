@@ -11,7 +11,9 @@ app.use(express.json());
 
 // 模拟路由
 const circlesRoutes = require('../../routes/circles');
+const publicRoutes = require('../../routes/public');
 app.use('/api/circles', circlesRoutes);
+app.use('/api/public', publicRoutes);
 
 // 添加错误处理中间件
 app.use(globalErrorHandler);
@@ -974,40 +976,23 @@ describe('Circles Routes Test', () => {
     });
   });
 
-  describe('GET /api/circles/:id - View Single Circle (guest access)', () => {
-    test('should allow guest users to view public circles', async () => {
+  describe('GET /api/circles/:id - View Single Circle (requires auth)', () => {
+    test('should require openid to view circles', async () => {
       const publicCircle = await createTestCircle({
         name: '公开朋友圈',
         isPublic: true
       }, testUser);
 
-      // 不提供openid
+      // 不提供openid - 应该返回401
       const response = await request(app)
         .get(`/api/circles/${publicCircle._id}`)
-        .expect(200);
-
-      expect(response.body.success).toBe(true);
-      expect(response.body.data.circle._id).toBe(publicCircle._id.toString());
-      expect(response.body.data.circle.name).toBe('公开朋友圈');
-      expect(response.body.data.circle.isPublic).toBe(true);
-    });
-
-    test('should not allow guest users to view private circles', async () => {
-      const privateCircle = await createTestCircle({
-        name: '私密朋友圈',
-        isPublic: false
-      }, testUser);
-
-      // 不提供openid
-      const response = await request(app)
-        .get(`/api/circles/${privateCircle._id}`)
-        .expect(403);
+        .expect(401);
 
       expect(response.body.status).toBe('fail');
-      expect(response.body.message).toBe('私密朋友圈，无权访问');
+      expect(response.body.message).toBe('缺少openid参数');
     });
 
-    test('should allow logged-in users to view public circles with more details', async () => {
+    test('should allow logged-in users to view public circles', async () => {
       const publicCircle = await createTestCircle({
         name: '公开朋友圈',
         isPublic: true
@@ -1024,7 +1009,52 @@ describe('Circles Routes Test', () => {
     });
   });
 
-  describe('GET /api/circles/random - Random Public Circle (for promotion)', () => {
+  describe('GET /api/public/circles/:id - Public Circle API (no auth required)', () => {
+    test('should allow anyone to view public circles without auth', async () => {
+      const publicCircle = await createTestCircle({
+        name: '公开朋友圈',
+        isPublic: true
+      }, testUser);
+
+      // 不提供openid - 使用公开API
+      const response = await request(app)
+        .get(`/api/public/circles/${publicCircle._id}`)
+        .expect(200);
+
+      expect(response.body.success).toBe(true);
+      expect(response.body.data.circle._id).toBe(publicCircle._id.toString());
+      expect(response.body.data.circle.name).toBe('公开朋友圈');
+      expect(response.body.data.circle.isPublic).toBe(true);
+    });
+
+    test('should not allow access to private circles via public API', async () => {
+      const privateCircle = await createTestCircle({
+        name: '私密朋友圈',
+        isPublic: false
+      }, testUser);
+
+      // 尝试通过公开API访问私密朋友圈
+      const response = await request(app)
+        .get(`/api/public/circles/${privateCircle._id}`)
+        .expect(403);
+
+      expect(response.body.status).toBe('fail');
+      expect(response.body.message).toBe('无权访问私密朋友圈');
+    });
+
+    test('should return 404 for non-existent circles', async () => {
+      const fakeId = '507f1f77bcf86cd799439011';
+
+      const response = await request(app)
+        .get(`/api/public/circles/${fakeId}`)
+        .expect(404);
+
+      expect(response.body.status).toBe('fail');
+      expect(response.body.message).toBe('朋友圈不存在');
+    });
+  });
+
+  describe('GET /api/public/circles/random - Random Public Circle (for promotion)', () => {
     beforeEach(async () => {
       // 清理所有公开朋友圈，确保测试隔离
       await Circle.deleteMany({ isPublic: true });
@@ -1044,7 +1074,7 @@ describe('Circles Routes Test', () => {
 
       // 不提供openid
       const response = await request(app)
-        .get('/api/circles/random')
+        .get('/api/public/circles/random')
         .expect(200);
 
       expect(response.body.success).toBe(true);
@@ -1066,7 +1096,7 @@ describe('Circles Routes Test', () => {
 
       // 提供openid
       const response = await request(app)
-        .get('/api/circles/random')
+        .get('/api/public/circles/random')
         .query({ openid: testUser.openid })
         .expect(200);
 
@@ -1080,7 +1110,7 @@ describe('Circles Routes Test', () => {
       await Circle.deleteMany({ isPublic: true });
       
       const response = await request(app)
-        .get('/api/circles/random')
+        .get('/api/public/circles/random')
         .expect(200);
 
       expect(response.body).toEqual({
