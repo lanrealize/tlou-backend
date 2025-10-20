@@ -14,12 +14,12 @@ app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
-// 限流配置
-const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 100
-});
-app.use(limiter);
+// 限流配置 (临时禁用以便开发)
+// const limiter = rateLimit({
+//   windowMs: 15 * 60 * 1000,
+//   max: 100
+// });
+// app.use(limiter);
 
 
 
