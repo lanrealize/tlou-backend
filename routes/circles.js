@@ -8,7 +8,7 @@ const { catchAsync, AppError } = require('../utils/errorHandler');
 const Post = require('../models/Post');
 const { updateCircleActivity } = require('../utils/circleUtils');
 const randomCircleController = require('../controllers/randomCircle.controller');
-const { cleanupUserInCircle } = require('../utils/memberCleanup');
+const { cleanupUserInCircle, deletePostsWithImages } = require('../utils/memberCleanup');
 
 const router = express.Router();
 
@@ -123,8 +123,10 @@ router.delete('/:id/leave', checkOpenid, requirePermission('circle', 'member'), 
     throw new AppError('创建者不能退出朋友圈', 400);
   }
 
-  // 清理用户在朋友圈的所有痕迹（帖子、评论、点赞）
-  const cleanupStats = await cleanupUserInCircle(req.user._id, req.params.id);
+  // 清理用户在朋友圈的所有痕迹（帖子、评论、点赞、七牛云图片）
+  const cleanupStats = await cleanupUserInCircle(req.user._id, req.params.id, {
+    deleteQiniuImages: true
+  });
 
   // 从成员列表中移除用户
   await Circle.findByIdAndUpdate(req.params.id, {
@@ -149,8 +151,8 @@ router.delete('/:id/leave', checkOpenid, requirePermission('circle', 'member'), 
 router.delete('/:id', checkOpenid, requirePermission('circle', 'creator'), catchAsync(async (req, res) => {
   // req.circle 已由中间件提供，权限已检查
 
-  // 级联删除该朋友圈下的所有帖子
-  await Post.deleteMany({ circle: req.params.id });
+  // 级联删除该朋友圈下的所有帖子（包括七牛云图片）
+  await deletePostsWithImages({ circle: req.params.id }, true);
 
   // 删除朋友圈
   await Circle.findByIdAndDelete(req.params.id);
@@ -177,8 +179,10 @@ router.delete('/:id/members/:userId', checkOpenid, requirePermission('circle', '
     throw new AppError('创建者不能删除自己', 400);
   }
 
-  // 清理被删除成员在朋友圈的所有痕迹（帖子、评论、点赞）
-  const cleanupStats = await cleanupUserInCircle(memberToRemove, req.params.id);
+  // 清理被删除成员在朋友圈的所有痕迹（帖子、评论、点赞、七牛云图片）
+  const cleanupStats = await cleanupUserInCircle(memberToRemove, req.params.id, {
+    deleteQiniuImages: true
+  });
 
   // 从朋友圈移除指定成员
   await Circle.findByIdAndUpdate(req.params.id, {

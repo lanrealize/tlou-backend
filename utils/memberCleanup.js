@@ -1,5 +1,44 @@
 const Post = require('../models/Post');
 const Circle = require('../models/Circle');
+const { deleteQiniuFiles } = require('./qiniuUtils');
+
+/**
+ * 删除帖子并同时删除七牛云图片的辅助函数
+ * @param {Object} query - MongoDB 查询条件
+ * @param {Boolean} deleteImages - 是否删除七牛云图片
+ * @returns {Number} 删除的帖子数量
+ */
+async function deletePostsWithImages(query, deleteImages = false) {
+  if (!deleteImages) {
+    const result = await Post.deleteMany(query);
+    return result.deletedCount;
+  }
+
+  // 先查询帖子获取图片URL
+  const postsToDelete = await Post.find(query).select('images').lean();
+  
+  // 收集图片URL
+  const imageUrls = [];
+  postsToDelete.forEach(post => {
+    if (post.images && post.images.length > 0) {
+      post.images.forEach(img => {
+        const url = typeof img === 'string' ? img : img.url;
+        if (url) imageUrls.push(url);
+      });
+    }
+  });
+  
+  // 删除帖子
+  const result = await Post.deleteMany(query);
+  
+  // 异步删除七牛云图片（不阻塞流程）
+  if (imageUrls.length > 0) {
+    console.log(`准备删除 ${imageUrls.length} 张七牛云图片`);
+    setImmediate(() => deleteQiniuFiles(imageUrls));
+  }
+  
+  return result.deletedCount;
+}
 
 /**
  * 清理用户在朋友圈的所有痕迹
@@ -7,9 +46,12 @@ const Circle = require('../models/Circle');
  * 
  * @param {ObjectId} userId - 用户ID
  * @param {ObjectId} circleId - 朋友圈ID
+ * @param {Object} options - 可选配置
+ * @param {Boolean} options.deleteQiniuImages - 是否删除七牛云图片（默认 false）
  * @returns {Object} 清理统计信息
  */
-async function cleanupUserInCircle(userId, circleId) {
+async function cleanupUserInCircle(userId, circleId, options = {}) {
+  const { deleteQiniuImages = false } = options;
   const userIdStr = userId.toString();
   
   const stats = {
@@ -20,12 +62,11 @@ async function cleanupUserInCircle(userId, circleId) {
   };
 
   try {
-    // 1. 删除用户在该朋友圈的所有帖子
-    const deletePostsResult = await Post.deleteMany({
-      author: userId,
-      circle: circleId
-    });
-    stats.deletedPosts = deletePostsResult.deletedCount;
+    // 1. 删除用户在该朋友圈的所有帖子（可选：同时删除七牛云图片）
+    stats.deletedPosts = await deletePostsWithImages(
+      { author: userId, circle: circleId },
+      deleteQiniuImages
+    );
 
     // 2. 删除用户在该朋友圈其他帖子下的所有评论
     const deleteCommentsResult = await Post.updateMany(
@@ -136,6 +177,7 @@ async function getUserActivityStats(userId, circleId) {
 
 module.exports = {
   cleanupUserInCircle,
-  getUserActivityStats
+  getUserActivityStats,
+  deletePostsWithImages
 };
 
