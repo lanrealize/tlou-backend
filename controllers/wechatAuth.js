@@ -149,7 +149,7 @@ async function registerUser(req, res) {
     if (dbError.code === 11000) {
       return res.status(409).json({
         success: false,
-        message: '用户名或openid已存在'
+        message: 'openid已存在'
       });
     }
     

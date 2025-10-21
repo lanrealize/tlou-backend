@@ -335,7 +335,7 @@ describe('WeChat Auth Controller Test', () => {
       expect(res.status).toHaveBeenCalledWith(409);
       expect(res.json).toHaveBeenCalledWith({
         success: false,
-        message: '用户名或openid已存在'
+        message: 'openid已存在'
       });
 
       // 恢复原始方法
