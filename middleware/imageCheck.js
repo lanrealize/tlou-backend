@@ -135,6 +135,88 @@ async function checkImagesMiddleware(req, res, next) {
 }
 
 /**
+ * 头像内容检查中间件（适配器）
+ * 将单个头像包装成数组，复用图片检查逻辑
+ */
+async function checkAvatarMiddleware(req, res, next) {
+  try {
+    const { avatar } = req.body;
+    
+    // 没有头像，直接通过
+    if (!avatar) {
+      return next();
+    }
+
+    console.log('🔍 开始头像内容检查...');
+    
+    // 将单个头像包装成数组，复用现有检查逻辑
+    const imageUrl = typeof avatar === 'string' ? avatar : avatar.url;
+    
+    if (!imageUrl) {
+      throw new AppError('头像URL为空', 400);
+    }
+
+    try {
+      const result = await checkImageContent(imageUrl);
+      
+      // 检查通过
+      if (result.errcode === 0) {
+        console.log(`✅ 头像检查通过:`, imageUrl.substring(0, 50) + '...');
+        return next();
+      } else if (result.errcode === 87014) {
+        // 头像内容违规 - 立即删除
+        console.log(`❌ 头像违规:`, imageUrl.substring(0, 50) + '...', result.errmsg);
+        setImmediate(() => deleteQiniuFiles(imageUrl));
+        
+        // 返回422错误
+        const error = new AppError('头像内容违规，请更换后重试', 422);
+        error.type = 'CONTENT_VIOLATION';
+        error.violatedImages = [{
+          url: imageUrl,
+          reason: result.errmsg || '内容不符合规范',
+          code: result.errcode
+        }];
+        throw error;
+      } else {
+        throw new Error(`意外的检查结果 [errcode: ${result.errcode}]: ${result.errmsg}`);
+      }
+    } catch (error) {
+      // 处理检查过程中的错误
+      console.error('头像内容检查失败:', error);
+      
+      if (error instanceof AppError) {
+        throw error;
+      }
+      
+      let errorMsg;
+      if (error.message === '图片不存在') {
+        errorMsg = '头像不存在或无法访问';
+      } else if (error.message.includes('timeout')) {
+        errorMsg = '头像下载超时';
+      } else if (error.message.includes('微信图片检查API调用失败')) {
+        if (error.message.includes('40006')) {
+          errorMsg = '头像文件异常大，无法完成检查。建议使用其他图片';
+        } else if (error.message.includes('45009')) {
+          errorMsg = '系统繁忙，请稍后再试';
+        } else if (error.message.includes('40001') || error.message.includes('41001')) {
+          errorMsg = '图片检查服务异常，请联系管理员';
+        } else {
+          errorMsg = `图片检查失败: ${error.message.split(':')[1] || error.message}`;
+        }
+      } else if (error.message.includes('获取微信access_token失败')) {
+        errorMsg = '图片检查服务配置错误，请联系管理员';
+      } else {
+        errorMsg = `头像检查失败: ${error.message}`;
+      }
+      
+      throw new AppError(errorMsg, 400);
+    }
+  } catch (error) {
+    next(error);
+  }
+}
+
+/**
  * 取消待删除的图片删除任务
  * 在帖子成功发布时调用，避免删除已使用的图片
  */
@@ -151,5 +233,6 @@ function cancelImageDeletion(deletionId) {
 
 module.exports = {
   checkImagesMiddleware,
+  checkAvatarMiddleware,
   cancelImageDeletion
 };
