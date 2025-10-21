@@ -249,7 +249,15 @@ describe('Circles Routes Test', () => {
 
       expect(response.body).toEqual({
         success: true,
-        message: '已退出朋友圈'
+        message: '已退出朋友圈',
+        data: {
+          cleaned: {
+            posts: expect.any(Number),
+            comments: expect.any(Number),
+            likes: expect.any(Number),
+            replyReferences: expect.any(Number)
+          }
+        }
       });
     });
 
@@ -416,7 +424,15 @@ describe('Circles Routes Test', () => {
 
       expect(response.body).toEqual({
         success: true,
-        message: '成员已被移除'
+        message: '成员已被移除',
+        data: {
+          cleaned: {
+            posts: expect.any(Number),
+            comments: expect.any(Number),
+            likes: expect.any(Number),
+            replyReferences: expect.any(Number)
+          }
+        }
       });
 
       // 验证成员确实被移除

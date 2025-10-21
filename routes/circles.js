@@ -8,6 +8,7 @@ const { catchAsync, AppError } = require('../utils/errorHandler');
 const Post = require('../models/Post');
 const { updateCircleActivity } = require('../utils/circleUtils');
 const randomCircleController = require('../controllers/randomCircle.controller');
+const { cleanupUserInCircle } = require('../utils/memberCleanup');
 
 const router = express.Router();
 
@@ -122,13 +123,25 @@ router.delete('/:id/leave', checkOpenid, requirePermission('circle', 'member'), 
     throw new AppError('创建者不能退出朋友圈', 400);
   }
 
+  // 清理用户在朋友圈的所有痕迹（帖子、评论、点赞）
+  const cleanupStats = await cleanupUserInCircle(req.user._id, req.params.id);
+
+  // 从成员列表中移除用户
   await Circle.findByIdAndUpdate(req.params.id, {
     $pull: { members: req.user._id }
   });
 
   res.json({
     success: true,
-    message: '已退出朋友圈'
+    message: '已退出朋友圈',
+    data: {
+      cleaned: {
+        posts: cleanupStats.deletedPosts,
+        comments: cleanupStats.deletedComments,
+        likes: cleanupStats.deletedLikes,
+        replyReferences: cleanupStats.clearedReplyTo
+      }
+    }
   });
 }));
 
@@ -164,6 +177,9 @@ router.delete('/:id/members/:userId', checkOpenid, requirePermission('circle', '
     throw new AppError('创建者不能删除自己', 400);
   }
 
+  // 清理被删除成员在朋友圈的所有痕迹（帖子、评论、点赞）
+  const cleanupStats = await cleanupUserInCircle(memberToRemove, req.params.id);
+
   // 从朋友圈移除指定成员
   await Circle.findByIdAndUpdate(req.params.id, {
     $pull: { members: memberToRemove }
@@ -173,7 +189,15 @@ router.delete('/:id/members/:userId', checkOpenid, requirePermission('circle', '
 
   res.json({
     success: true,
-    message: '成员已被移除'
+    message: '成员已被移除',
+    data: {
+      cleaned: {
+        posts: cleanupStats.deletedPosts,
+        comments: cleanupStats.deletedComments,
+        likes: cleanupStats.deletedLikes,
+        replyReferences: cleanupStats.clearedReplyTo
+      }
+    }
   });
 }));
 
