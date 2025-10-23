@@ -660,10 +660,14 @@ describe('Posts Routes Test', () => {
         .send(commentData)
         .expect(201);
 
-      expect(response.body).toEqual({
-        success: true,
-        message: '评论成功'
-      });
+      expect(response.body.success).toBe(true);
+      expect(response.body.message).toBe('评论成功');
+      expect(response.body.data).toBeDefined();
+      expect(response.body.data.commentId).toBeDefined();
+      expect(response.body.data._id).toBeDefined();
+      
+      // 验证commentId和_id是相同的ObjectId
+      expect(response.body.data.commentId).toBe(response.body.data._id);
     });
 
     test('should add reply comment successfully', async () => {
@@ -679,10 +683,14 @@ describe('Posts Routes Test', () => {
         .send(commentData)
         .expect(201);
 
-      expect(response.body).toEqual({
-        success: true,
-        message: '评论成功'
-      });
+      expect(response.body.success).toBe(true);
+      expect(response.body.message).toBe('评论成功');
+      expect(response.body.data).toBeDefined();
+      expect(response.body.data.commentId).toBeDefined();
+      expect(response.body.data._id).toBeDefined();
+      
+      // 验证commentId和_id是相同的ObjectId
+      expect(response.body.data.commentId).toBe(response.body.data._id);
     });
 
     test('should return 400 when content is missing', async () => {

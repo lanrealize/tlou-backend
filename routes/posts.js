@@ -263,7 +263,11 @@ router.post('/:id/comments', checkOpenid, requirePermission('post', 'access'), [
 
   res.status(201).json({
     success: true,
-    message: '评论成功'
+    message: '评论成功',
+    data: {
+      commentId: newComment._id,
+      _id: newComment._id
+    }
   });
 }));
 
