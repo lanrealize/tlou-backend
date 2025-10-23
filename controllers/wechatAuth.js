@@ -166,6 +166,16 @@ async function deleteUser(req, res) {
     const userId = req.user._id;
     const user = req.user;
 
+    // 保护主账号不被删除
+    const PROTECTED_OPENID = 'o4Y5CvoRL1Oodi_q7jWWrsMyqMIo'; // 孙鹏远的账号
+    if (user.openid === PROTECTED_OPENID) {
+      console.log(`🛡️  阻止删除受保护的主账号: ${user.username} (${user.openid})`);
+      return res.status(403).json({
+        success: false,
+        message: '该账号为系统主账号，无法注销'
+      });
+    }
+
     console.log(`用户 ${user.username} (${userId}) 开始注销流程`);
 
     // 统计数据
