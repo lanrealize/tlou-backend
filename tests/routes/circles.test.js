@@ -31,7 +31,7 @@ describe('Circles Routes Test', () => {
       const circleData = {
         name: '测试朋友圈',
         isPublic: true,
-        openid: testUser.openid
+        openid: testUser._id
       };
 
       const response = await request(app)
@@ -59,7 +59,7 @@ describe('Circles Routes Test', () => {
     test('should return 400 when name is missing', async () => {
       const circleData = {
         isPublic: true,
-        openid: testUser.openid
+        openid: testUser._id
       };
 
       const response = await request(app)
@@ -122,7 +122,7 @@ describe('Circles Routes Test', () => {
 
       const response = await request(app)
         .get('/api/circles/my')
-        .query({ openid: testUser.openid })
+        .query({ openid: testUser._id })
         .expect(200);
 
       expect(response.body).toEqual({
@@ -153,7 +153,7 @@ describe('Circles Routes Test', () => {
 
       const response = await request(app)
         .get('/api/circles/my')
-        .query({ openid: newUser.openid })
+        .query({ openid: newUser._id })
         .expect(200);
 
       expect(response.body).toEqual({
@@ -186,7 +186,7 @@ describe('Circles Routes Test', () => {
 
       const response = await request(app)
         .post(`/api/circles/${publicCircle._id}/join`)
-        .send({ openid: newUser.openid })
+        .send({ openid: newUser._id })
         .expect(200);
 
       expect(response.body).toEqual({
@@ -200,7 +200,7 @@ describe('Circles Routes Test', () => {
 
       const response = await request(app)
         .post(`/api/circles/${fakeId}/join`)
-        .send({ openid: testUser.openid })
+        .send({ openid: testUser._id })
         .expect(404);
 
       expect(response.body).toEqual({
@@ -212,7 +212,7 @@ describe('Circles Routes Test', () => {
     test('should return 400 when user is already member', async () => {
       const response = await request(app)
         .post(`/api/circles/${testCircle._id}/join`)
-        .send({ openid: testUser.openid })
+        .send({ openid: testUser._id })
         .expect(400);
 
       expect(response.body).toEqual({
@@ -244,7 +244,7 @@ describe('Circles Routes Test', () => {
 
       const response = await request(app)
         .delete(`/api/circles/${testCircle._id}/leave`)
-        .send({ openid: member.openid })
+        .send({ openid: member._id })
         .expect(200);
 
       expect(response.body).toEqual({
@@ -266,7 +266,7 @@ describe('Circles Routes Test', () => {
 
       const response = await request(app)
         .delete(`/api/circles/${fakeId}/leave`)
-        .send({ openid: testUser.openid })
+        .send({ openid: testUser._id })
         .expect(404);
 
       expect(response.body).toEqual({
@@ -280,7 +280,7 @@ describe('Circles Routes Test', () => {
 
       const response = await request(app)
         .delete(`/api/circles/${testCircle._id}/leave`)
-        .send({ openid: nonMember.openid })
+        .send({ openid: nonMember._id })
         .expect(400);
 
       expect(response.body).toEqual({
@@ -292,7 +292,7 @@ describe('Circles Routes Test', () => {
     test('should return 400 when creator tries to leave', async () => {
       const response = await request(app)
         .delete(`/api/circles/${testCircle._id}/leave`)
-        .send({ openid: testUser.openid })
+        .send({ openid: testUser._id })
         .expect(400);
 
       expect(response.body).toEqual({
@@ -317,7 +317,7 @@ describe('Circles Routes Test', () => {
     test('should allow creator to delete circle', async () => {
       const response = await request(app)
         .delete(`/api/circles/${testCircle._id}`)
-        .send({ openid: testUser.openid })
+        .send({ openid: testUser._id })
         .expect(200);
 
       expect(response.body).toEqual({
@@ -353,7 +353,7 @@ describe('Circles Routes Test', () => {
       // 删除朋友圈
       const response = await request(app)
         .delete(`/api/circles/${circle._id}`)
-        .send({ openid: testUser.openid })
+        .send({ openid: testUser._id })
         .expect(200);
 
       expect(response.body).toEqual({
@@ -373,7 +373,7 @@ describe('Circles Routes Test', () => {
 
       const response = await request(app)
         .delete(`/api/circles/${fakeId}`)
-        .send({ openid: testUser.openid })
+        .send({ openid: testUser._id })
         .expect(404);
 
       expect(response.body).toEqual({
@@ -387,7 +387,7 @@ describe('Circles Routes Test', () => {
 
       const response = await request(app)
         .delete(`/api/circles/${testCircle._id}`)
-        .send({ openid: nonCreator.openid })
+        .send({ openid: nonCreator._id })
         .expect(403);
 
       expect(response.body).toEqual({
@@ -419,7 +419,7 @@ describe('Circles Routes Test', () => {
 
       const response = await request(app)
         .delete(`/api/circles/${testCircle._id}/members/${member._id}`)
-        .send({ openid: testUser.openid })
+        .send({ openid: testUser._id })
         .expect(200);
 
       expect(response.body).toEqual({
@@ -446,7 +446,7 @@ describe('Circles Routes Test', () => {
 
       const response = await request(app)
         .delete(`/api/circles/${fakeId}/members/${member._id}`)
-        .send({ openid: testUser.openid })
+        .send({ openid: testUser._id })
         .expect(404);
 
       expect(response.body).toEqual({
@@ -466,7 +466,7 @@ describe('Circles Routes Test', () => {
 
       const response = await request(app)
         .delete(`/api/circles/${testCircle._id}/members/${member._id}`)
-        .send({ openid: nonCreator.openid })
+        .send({ openid: nonCreator._id })
         .expect(403);
 
       expect(response.body).toEqual({
@@ -480,7 +480,7 @@ describe('Circles Routes Test', () => {
 
       const response = await request(app)
         .delete(`/api/circles/${testCircle._id}/members/${nonMember._id}`)
-        .send({ openid: testUser.openid })
+        .send({ openid: testUser._id })
         .expect(400);
 
       expect(response.body).toEqual({
@@ -492,7 +492,7 @@ describe('Circles Routes Test', () => {
     test('should return 400 when creator tries to remove themselves', async () => {
       const response = await request(app)
         .delete(`/api/circles/${testCircle._id}/members/${testUser._id}`)
-        .send({ openid: testUser.openid })
+        .send({ openid: testUser._id })
         .expect(400);
 
       expect(response.body).toEqual({
@@ -528,7 +528,7 @@ describe('Circles Routes Test', () => {
         description: '这是一个私密的朋友圈',
         allowInvite: false,
         allowPost: true,
-        openid: testUser.openid
+        openid: testUser._id
       };
 
       const response = await request(app)
@@ -558,7 +558,7 @@ describe('Circles Routes Test', () => {
     test('should update only provided fields', async () => {
       const settingsData = {
         isPublic: false,
-        openid: testUser.openid
+        openid: testUser._id
       };
 
       const response = await request(app)
@@ -585,7 +585,7 @@ describe('Circles Routes Test', () => {
       const fakeId = '507f1f77bcf86cd799439011';
       const settingsData = {
         isPublic: false,
-        openid: testUser.openid
+        openid: testUser._id
       };
 
       const response = await request(app)
@@ -603,7 +603,7 @@ describe('Circles Routes Test', () => {
       const member = await createTestUser();
       const settingsData = {
         isPublic: false,
-        openid: member.openid
+        openid: member._id
       };
 
       const response = await request(app)
@@ -619,7 +619,7 @@ describe('Circles Routes Test', () => {
 
     test('should return 400 when no fields provided', async () => {
       const settingsData = {
-        openid: testUser.openid
+        openid: testUser._id
       };
 
       const response = await request(app)
@@ -636,7 +636,7 @@ describe('Circles Routes Test', () => {
     test('should return 400 when name is too long', async () => {
       const settingsData = {
         name: 'a'.repeat(51), // 超过50个字符
-        openid: testUser.openid
+        openid: testUser._id
       };
 
       const response = await request(app)
@@ -653,7 +653,7 @@ describe('Circles Routes Test', () => {
     test('should return 400 when description is too long', async () => {
       const settingsData = {
         description: 'a'.repeat(201), // 超过200个字符
-        openid: testUser.openid
+        openid: testUser._id
       };
 
       const response = await request(app)
@@ -694,7 +694,7 @@ describe('Circles Routes Test', () => {
 
       const response = await request(app)
         .post(`/api/circles/${publicCircle._id}/apply`)
-        .send({ openid: applicant.openid })
+        .send({ openid: applicant._id })
         .expect(200);
 
       expect(response.body).toEqual({
@@ -712,7 +712,7 @@ describe('Circles Routes Test', () => {
 
       const response = await request(app)
         .post(`/api/circles/${privateCircle._id}/apply`)
-        .send({ openid: applicant.openid })
+        .send({ openid: applicant._id })
         .expect(400);
 
       expect(response.body).toEqual({
@@ -731,13 +731,13 @@ describe('Circles Routes Test', () => {
       // 第一次申请
       await request(app)
         .post(`/api/circles/${publicCircle._id}/apply`)
-        .send({ openid: applicant.openid })
+        .send({ openid: applicant._id })
         .expect(200);
 
       // 第二次申请
       const response = await request(app)
         .post(`/api/circles/${publicCircle._id}/apply`)
-        .send({ openid: applicant.openid })
+        .send({ openid: applicant._id })
         .expect(400);
 
       expect(response.body).toEqual({
@@ -749,7 +749,7 @@ describe('Circles Routes Test', () => {
     test('should not allow members to apply', async () => {
       const response = await request(app)
         .post(`/api/circles/${testCircle._id}/apply`)
-        .send({ openid: testUser.openid })
+        .send({ openid: testUser._id })
         .expect(400);
 
       expect(response.body).toEqual({
@@ -764,7 +764,7 @@ describe('Circles Routes Test', () => {
 
       const response = await request(app)
         .post(`/api/circles/${fakeId}/apply`)
-        .send({ openid: applicant.openid })
+        .send({ openid: applicant._id })
         .expect(404);
 
       expect(response.body).toEqual({
@@ -793,7 +793,7 @@ describe('Circles Routes Test', () => {
     test('should allow creator to approve application', async () => {
       const response = await request(app)
         .post(`/api/circles/${publicCircle._id}/approve/${applicant._id}`)
-        .send({ openid: testUser.openid })
+        .send({ openid: testUser._id })
         .expect(200);
 
       expect(response.body).toEqual({
@@ -807,7 +807,7 @@ describe('Circles Routes Test', () => {
 
       const response = await request(app)
         .post(`/api/circles/${publicCircle._id}/approve/${applicant._id}`)
-        .send({ openid: nonCreator.openid })
+        .send({ openid: nonCreator._id })
         .expect(403);
 
       expect(response.body).toEqual({
@@ -821,7 +821,7 @@ describe('Circles Routes Test', () => {
 
       const response = await request(app)
         .post(`/api/circles/${publicCircle._id}/approve/${nonApplicant._id}`)
-        .send({ openid: testUser.openid })
+        .send({ openid: testUser._id })
         .expect(400);
 
       expect(response.body).toEqual({
@@ -835,7 +835,7 @@ describe('Circles Routes Test', () => {
 
       const response = await request(app)
         .post(`/api/circles/${fakeId}/approve/${applicant._id}`)
-        .send({ openid: testUser.openid })
+        .send({ openid: testUser._id })
         .expect(404);
 
       expect(response.body).toEqual({
@@ -864,7 +864,7 @@ describe('Circles Routes Test', () => {
     test('should allow creator to reject application', async () => {
       const response = await request(app)
         .post(`/api/circles/${publicCircle._id}/reject/${applicant._id}`)
-        .send({ openid: testUser.openid })
+        .send({ openid: testUser._id })
         .expect(200);
 
       expect(response.body).toEqual({
@@ -878,7 +878,7 @@ describe('Circles Routes Test', () => {
 
       const response = await request(app)
         .post(`/api/circles/${publicCircle._id}/reject/${applicant._id}`)
-        .send({ openid: nonCreator.openid })
+        .send({ openid: nonCreator._id })
         .expect(403);
 
       expect(response.body).toEqual({
@@ -892,7 +892,7 @@ describe('Circles Routes Test', () => {
 
       const response = await request(app)
         .post(`/api/circles/${publicCircle._id}/reject/${nonApplicant._id}`)
-        .send({ openid: testUser.openid })
+        .send({ openid: testUser._id })
         .expect(400);
 
       expect(response.body).toEqual({
@@ -924,7 +924,7 @@ describe('Circles Routes Test', () => {
     test('should allow creator to view appliers list', async () => {
       const response = await request(app)
         .get(`/api/circles/${publicCircle._id}/appliers`)
-        .query({ openid: testUser.openid })
+        .query({ openid: testUser._id })
         .expect(200);
 
       expect(response.body).toEqual({
@@ -949,7 +949,7 @@ describe('Circles Routes Test', () => {
 
       const response = await request(app)
         .get(`/api/circles/${publicCircle._id}/appliers`)
-        .query({ openid: nonCreator.openid })
+        .query({ openid: nonCreator._id })
         .expect(403);
 
       expect(response.body).toEqual({
@@ -966,7 +966,7 @@ describe('Circles Routes Test', () => {
 
       const response = await request(app)
         .get(`/api/circles/${emptyCircle._id}/appliers`)
-        .query({ openid: testUser.openid })
+        .query({ openid: testUser._id })
         .expect(200);
 
       expect(response.body).toEqual({
@@ -982,7 +982,7 @@ describe('Circles Routes Test', () => {
 
       const response = await request(app)
         .get(`/api/circles/${fakeId}/appliers`)
-        .query({ openid: testUser.openid })
+        .query({ openid: testUser._id })
         .expect(404);
 
       expect(response.body).toEqual({
@@ -1017,7 +1017,7 @@ describe('Circles Routes Test', () => {
       // 提供openid
       const response = await request(app)
         .get(`/api/circles/${publicCircle._id}`)
-        .query({ openid: testUser.openid })
+        .query({ openid: testUser._id })
         .expect(200);
 
       expect(response.body.success).toBe(true);
@@ -1113,7 +1113,7 @@ describe('Circles Routes Test', () => {
       // 提供openid
       const response = await request(app)
         .get('/api/public/circles/random')
-        .query({ openid: testUser.openid })
+        .query({ openid: testUser._id })
         .expect(200);
 
       expect(response.body.success).toBe(true);
@@ -1165,7 +1165,7 @@ describe('Circles Routes Test', () => {
 
       const response = await request(app)
         .get('/api/circles/my')
-        .query({ openid: testUser.openid })
+        .query({ openid: testUser._id })
         .expect(200);
 
       expect(response.body.success).toBe(true);
@@ -1187,7 +1187,7 @@ describe('Circles Routes Test', () => {
 
       const response = await request(app)
         .get('/api/circles/my')
-        .query({ openid: testUser.openid })
+        .query({ openid: testUser._id })
         .expect(200);
 
       expect(response.body.success).toBe(true);

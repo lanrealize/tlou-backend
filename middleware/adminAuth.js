@@ -9,7 +9,7 @@ const { AppError } = require('../utils/errorHandler');
  */
 async function checkAdminPermission(openid) {
   try {
-    const user = await User.findOne({ openid });
+    const user = await User.findById(openid);
     
     if (!user) {
       return { hasPermission: false, user: null, effectiveAdmin: null };
@@ -36,7 +36,7 @@ async function checkAdmin(req, res, next) {
     }
 
     // 使用简化的权限检查逻辑
-    const { hasPermission, user, effectiveAdmin } = await checkAdminPermission(req.user.openid);
+    const { hasPermission, user, effectiveAdmin } = await checkAdminPermission(req.user._id);
     
     if (!hasPermission) {
       return next(new AppError('需要管理员权限', 403));

@@ -59,17 +59,17 @@ async function getRandomPublicCircle(req, res) {
     // 从请求中获取 openid（支持可选认证）
     const openid = req.body?.openid || req.query?.openid || req.headers?.['x-openid'];
     let userId;
-    if (openid) {
-      const user = await User.findOne({ openid });
-      if (user) {
-        userId = user._id.toString();
-        console.log('✅ 用户已认证（openid）:', userId);
-      } else {
-        console.log('⚠️ 提供的openid无效，作为未登录用户继续');
-      }
+  if (openid) {
+    const user = await User.findById(openid);
+    if (user) {
+      userId = user._id;  // _id就是openid
+      console.log('✅ 用户已认证（openid）:', userId);
     } else {
-      console.log('ℹ️ 未提供openid，作为未登录用户继续');
+      console.log('⚠️ 提供的openid无效，作为未登录用户继续');
     }
+  } else {
+    console.log('ℹ️ 未提供openid，作为未登录用户继续');
+  }
 
     const shouldExcludeVisited = excludeVisited === 'true';
     const shouldResetHistory = resetHistory === 'true';

@@ -66,7 +66,7 @@ async function getUserInfo(req, res) {
   }
 
   try {
-    const user = await User.findOne({ openid });
+    const user = await User.findById(openid);
     
     if (!user) {
       return res.status(200).json({
@@ -81,8 +81,7 @@ async function getUserInfo(req, res) {
       message: '获取用户信息成功',
       data: {
         user: {
-          _id: user._id,
-          openid: user.openid,
+          _id: user._id,  // _id就是openid
           username: user.username,
           avatar: user.avatar,
           isAdmin: user.isAdmin
@@ -112,7 +111,7 @@ async function registerUser(req, res) {
 
   try {
     // 检查用户是否已存在
-    const existingUser = await User.findOne({ openid });
+    const existingUser = await User.findById(openid);
     if (existingUser) {
       return res.status(409).json({
         success: false,
@@ -122,7 +121,7 @@ async function registerUser(req, res) {
 
     // 创建新用户
     const newUser = await User.create({
-      openid,
+      _id: openid,  // openid作为主键
       username,
       avatar
     });
@@ -135,7 +134,6 @@ async function registerUser(req, res) {
       data: {
         user: {
           _id: newUser._id,
-          openid: newUser.openid,
           username: newUser.username,
           avatar: newUser.avatar,
           isAdmin: newUser.isAdmin
@@ -168,8 +166,8 @@ async function deleteUser(req, res) {
 
     // 保护主账号不被删除
     const PROTECTED_OPENID = 'o4Y5CvoRL1Oodi_q7jWWrsMyqMIo'; // 孙鹏远的账号
-    if (user.openid === PROTECTED_OPENID) {
-      console.log(`🛡️  阻止删除受保护的主账号: ${user.username} (${user.openid})`);
+    if (user._id === PROTECTED_OPENID) {
+      console.log(`🛡️  阻止删除受保护的主账号: ${user.username} (${user._id})`);
       return res.status(403).json({
         success: false,
         message: '该账号为系统主账号，无法注销'

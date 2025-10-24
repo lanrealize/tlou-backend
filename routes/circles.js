@@ -164,10 +164,10 @@ router.delete('/:id', checkOpenid, requirePermission('circle', 'creator'), catch
 }));
 
 // 删除朋友圈成员（创建者专用）
-router.delete('/:id/members/:userId', checkOpenid, requirePermission('circle', 'creator'), catchAsync(async (req, res) => {
+router.delete('/:id/members/:userOpenid', checkOpenid, requirePermission('circle', 'creator'), catchAsync(async (req, res) => {
   // req.circle 已由中间件提供，权限已检查
   const circle = req.circle;
-  const memberToRemove = req.params.userId;
+  const memberToRemove = req.params.userOpenid;
 
   // 检查被删除的用户是否是成员
   if (!circle.isMember(memberToRemove)) {
@@ -294,10 +294,10 @@ router.post('/:id/apply', checkOpenid, catchAsync(async (req, res) => {
 }));
 
 // 同意申请（将申请者加入朋友圈）
-router.post('/:id/approve/:userId', checkOpenid, requirePermission('circle', 'creator'), catchAsync(async (req, res) => {
+router.post('/:id/approve/:userOpenid', checkOpenid, requirePermission('circle', 'creator'), catchAsync(async (req, res) => {
   // req.circle 已由中间件提供，权限已检查
   const circle = req.circle;
-  const applicantId = req.params.userId;
+  const applicantId = req.params.userOpenid;
 
   if (!circle.isApplier(applicantId)) {
     throw new AppError('该用户未申请加入此朋友圈', 400);
@@ -321,10 +321,10 @@ router.post('/:id/approve/:userId', checkOpenid, requirePermission('circle', 'cr
 }));
 
 // 拒绝申请（从申请者列表中移除）
-router.post('/:id/reject/:userId', checkOpenid, requirePermission('circle', 'creator'), catchAsync(async (req, res) => {
+router.post('/:id/reject/:userOpenid', checkOpenid, requirePermission('circle', 'creator'), catchAsync(async (req, res) => {
   // req.circle 已由中间件提供，权限已检查
   const circle = req.circle;
-  const applicantId = req.params.userId;
+  const applicantId = req.params.userOpenid;
 
   if (!circle.isApplier(applicantId)) {
     throw new AppError('该用户未申请加入此朋友圈', 400);

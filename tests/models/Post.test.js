@@ -221,7 +221,7 @@ describe('Post Model Test', () => {
       
       expect(populatedPost.author).toBeDefined();
       expect(populatedPost.author.username).toBe(author.username);
-      expect(populatedPost.author.openid).toBe(author.openid);
+      expect(populatedPost.author._id).toBe(author._id);
     });
 
     test('should populate circle correctly', async () => {

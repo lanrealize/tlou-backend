@@ -34,7 +34,7 @@ async function setVirtualUsersAdmin() {
     // 显示将要更新的用户列表
     console.log('\n📋 将要更新的虚拟用户列表:');
     virtualUsers.forEach((user, index) => {
-      console.log(`   ${index + 1}. ${user.username} (${user.openid})`);
+      console.log(`   ${index + 1}. ${user.username} (${user._id})`);
     });
 
     // 批量更新虚拟用户为管理员
@@ -64,7 +64,7 @@ async function setVirtualUsersAdmin() {
     if (updatedVirtualUsers.length > 0) {
       console.log('\n👥 所有虚拟用户列表:');
       updatedVirtualUsers.forEach((user, index) => {
-        console.log(`   ${index + 1}. ${user.username} - 管理员: ${user.isAdmin ? '是' : '否'} (${user.openid})`);
+        console.log(`   ${index + 1}. ${user.username} - 管理员: ${user.isAdmin ? '是' : '否'} (${user._id})`);
       });
     }
 

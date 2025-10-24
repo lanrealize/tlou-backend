@@ -9,16 +9,16 @@ describe('Admin Auth Middleware', () => {
   beforeEach(async () => {
     // 创建普通用户
     testUser = await User.create({
+      _id: 'test_openid_123',  // openid作为主键
       username: 'testuser',
-      openid: 'test_openid_123',
       avatar: 'https://example.com/avatar.jpg',
       isAdmin: false
     });
 
     // 创建管理员用户
     adminUser = await User.create({
+      _id: 'admin_openid_456',  // openid作为主键
       username: 'admin',
-      openid: 'admin_openid_456',
       avatar: 'https://example.com/admin-avatar.jpg',
       isAdmin: true
     });

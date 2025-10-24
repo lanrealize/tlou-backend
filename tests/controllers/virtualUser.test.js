@@ -27,16 +27,16 @@ describe('Virtual User Controller', () => {
   beforeEach(async () => {
     // 创建管理员用户
     adminUser = await User.create({
+      _id: 'admin_openid_456',  // openid作为主键
       username: 'admin',
-      openid: 'admin_openid_456',
       avatar: 'https://example.com/admin-avatar.jpg',
       isAdmin: true
     });
 
     // 创建普通用户
     testUser = await User.create({
+      _id: 'test_openid_123',  // openid作为主键
       username: 'testuser',
-      openid: 'test_openid_123',
       avatar: 'https://example.com/avatar.jpg',
       isAdmin: false
     });
@@ -76,7 +76,7 @@ describe('Virtual User Controller', () => {
 
       // 验证openid格式
       const call = res.json.mock.calls[0][0];
-      expect(call.data.user.openid).toMatch(/^virtual_[a-f0-9]{32}$/);
+      expect(call.data.user._id).toMatch(/^virtual_[a-f0-9]{32}$/);
     });
 
     test('should validate required fields', async () => {
@@ -105,8 +105,8 @@ describe('Virtual User Controller', () => {
     test('should handle duplicate username', async () => {
       // 先创建一个虚拟用户
       await User.create({
+        _id: 'virtual_123456789012345678901234567890ab',  // openid作为主键
         username: '虚拟小美',
-        openid: 'virtual_123456789012345678901234567890ab',
         avatar: 'https://example.com/avatar1.jpg',
         isVirtual: true,
         virtualOwner: adminUser._id
@@ -139,8 +139,8 @@ describe('Virtual User Controller', () => {
     beforeEach(async () => {
       // 创建虚拟用户
       virtualUser = await User.create({
+        _id: 'virtual_123456789012345678901234567890ab',  // openid作为主键
         username: '虚拟小美',
-        openid: 'virtual_123456789012345678901234567890ab',
         avatar: 'https://example.com/virtual-avatar.jpg',
         isVirtual: true,
         virtualOwner: adminUser._id
@@ -149,7 +149,10 @@ describe('Virtual User Controller', () => {
 
     test('should get virtual users list', async () => {
       const req = { user: adminUser };
-      const res = { json: jest.fn() };
+      const res = { 
+        status: jest.fn().mockReturnThis(),
+        json: jest.fn() 
+      };
 
       await getVirtualUsers(req, res);
 
@@ -160,7 +163,7 @@ describe('Virtual User Controller', () => {
           users: expect.arrayContaining([
             expect.objectContaining({
               username: '虚拟小美',
-              openid: virtualUser.openid,
+              _id: virtualUser._id,  // _id就是openid
               avatar: virtualUser.avatar
             })
           ]),
@@ -179,7 +182,10 @@ describe('Virtual User Controller', () => {
       await User.findByIdAndDelete(virtualUser._id);
 
       const req = { user: adminUser };
-      const res = { json: jest.fn() };
+      const res = { 
+        status: jest.fn().mockReturnThis(),
+        json: jest.fn() 
+      };
 
       await getVirtualUsers(req, res);
 
@@ -202,8 +208,8 @@ describe('Virtual User Controller', () => {
   describe('updateVirtualUser', () => {
     beforeEach(async () => {
       virtualUser = await User.create({
+        _id: 'virtual_123456789012345678901234567890ab',  // openid作为主键
         username: '虚拟小美',
-        openid: 'virtual_123456789012345678901234567890ab',
         avatar: 'https://example.com/virtual-avatar.jpg',
         isVirtual: true,
         virtualOwner: adminUser._id
@@ -213,14 +219,17 @@ describe('Virtual User Controller', () => {
     test('should update virtual user successfully', async () => {
       const req = {
         user: adminUser,
-        params: { userId: virtualUser._id.toString() },
+        params: { userOpenid: virtualUser._id },  // 使用userOpenid参数
         body: {
           username: '虚拟小丽',
           avatar: 'https://example.com/new-avatar.jpg'
         }
       };
 
-      const res = { json: jest.fn() };
+      const res = { 
+        status: jest.fn().mockReturnThis(),
+        json: jest.fn() 
+      };
 
       await updateVirtualUser(req, res);
 
@@ -268,8 +277,8 @@ describe('Virtual User Controller', () => {
   describe('deleteVirtualUser', () => {
     beforeEach(async () => {
       virtualUser = await User.create({
+        _id: 'virtual_123456789012345678901234567890ab',  // openid作为主键
         username: '虚拟小美',
-        openid: 'virtual_123456789012345678901234567890ab',
         avatar: 'https://example.com/virtual-avatar.jpg',
         isVirtual: true,
         virtualOwner: adminUser._id
@@ -279,10 +288,13 @@ describe('Virtual User Controller', () => {
     test('should delete virtual user successfully', async () => {
       const req = {
         user: adminUser,
-        params: { userId: virtualUser._id.toString() }
+        params: { userOpenid: virtualUser._id }
       };
 
-      const res = { json: jest.fn() };
+      const res = { 
+        status: jest.fn().mockReturnThis(),
+        json: jest.fn() 
+      };
 
       await deleteVirtualUser(req, res);
 

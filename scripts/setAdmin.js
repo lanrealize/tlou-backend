@@ -19,7 +19,7 @@ async function setAdmin(openid) {
 
     // 查找用户
     console.log(`🔍 查找用户: ${openid}`);
-    const user = await User.findOne({ openid });
+    const user = await User.findById(openid);
     
     if (!user) {
       console.error('❌ 用户不存在，请先注册用户');
@@ -32,16 +32,15 @@ async function setAdmin(openid) {
     } else {
       // 设置为管理员
       console.log('🔧 设置用户为管理员...');
-      await User.findByIdAndUpdate(user._id, { isAdmin: true });
+      await User.findByIdAndUpdate(openid, { isAdmin: true });
       console.log('✅ 成功设置为管理员');
     }
 
     // 显示用户信息
-    const updatedUser = await User.findById(user._id);
+    const updatedUser = await User.findById(openid);
     console.log('\n👤 用户信息:');
-    console.log(`   ID: ${updatedUser._id}`);
+    console.log(`   OpenID: ${updatedUser._id}`);
     console.log(`   用户名: ${updatedUser.username}`);
-    console.log(`   OpenID: ${updatedUser.openid}`);
     console.log(`   管理员: ${updatedUser.isAdmin ? '是' : '否'}`);
     console.log(`   虚拟用户: ${updatedUser.isVirtual ? '是' : '否'}`);
     console.log(`   创建时间: ${updatedUser.createdAt}`);

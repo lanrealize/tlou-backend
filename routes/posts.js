@@ -222,10 +222,10 @@ router.post('/:id/comments', checkOpenid, requirePermission('post', 'access'), [
     .withMessage('评论内容不能为空')
     .isLength({ max: 500 })
     .withMessage('评论内容不能超过500字'),
-  body('replyToUserId')
+  body('replyToUserOpenid')
     .optional()
-    .isMongoId()
-    .withMessage('无效的回复用户ID')
+    .notEmpty()
+    .withMessage('无效的回复用户openid')
 ], catchAsync(async (req, res) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
@@ -233,14 +233,14 @@ router.post('/:id/comments', checkOpenid, requirePermission('post', 'access'), [
   }
 
   const postId = req.params.id;
-  const { content, replyToUserId } = req.body;
+  const { content, replyToUserOpenid } = req.body;
   const userId = req.user._id;
 
   // req.post 和 req.circle 已由中间件提供，权限已检查
   const post = req.post;
 
-  if (replyToUserId) {
-    const replyToUser = await User.findById(replyToUserId, 'username');
+  if (replyToUserOpenid) {
+    const replyToUser = await User.findById(replyToUserOpenid, 'username');
     if (!replyToUser) {
       throw new AppError('回复的用户不存在', 404);
     }
@@ -250,7 +250,7 @@ router.post('/:id/comments', checkOpenid, requirePermission('post', 'access'), [
     _id: new mongoose.Types.ObjectId(),
     author: userId,
     content,
-    replyTo: replyToUserId || null,
+    replyTo: replyToUserOpenid || null,
     createdAt: new Date()
   };
 

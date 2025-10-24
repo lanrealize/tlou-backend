@@ -98,7 +98,7 @@ describe('WeChat Auth Controller Test', () => {
   describe('getUserInfo', () => {
     test('should return user info when user exists', async () => {
       const existingUser = await createTestUser({
-        openid: 'test_openid_123',
+        _id: 'test_openid_123',  // openid作为主键
         username: 'test_user',
         avatar: 'https://example.com/avatar.jpg'
       });
@@ -116,8 +116,7 @@ describe('WeChat Auth Controller Test', () => {
         message: '获取用户信息成功',
         data: {
           user: {
-            _id: existingUser._id,
-            openid: 'test_openid_123',
+            _id: 'test_openid_123',  // _id就是openid
             username: 'test_user',
             avatar: 'https://example.com/avatar.jpg',
             isAdmin: false
@@ -196,13 +195,13 @@ describe('WeChat Auth Controller Test', () => {
       const response = res.json.mock.calls[0][0];
       expect(response.success).toBe(true);
       expect(response.message).toBe('用户注册成功');
-      expect(response.data.user.openid).toBe('test_openid_123');
+      expect(response.data.user._id).toBe('test_openid_123');
       expect(response.data.user.username).toBe('new_user');
       expect(response.data.user.avatar).toBe('https://example.com/avatar.jpg');
       expect(response.data.user.isAdmin).toBe(false);
 
       // 验证用户是否被创建
-      const createdUser = await User.findOne({ openid: 'test_openid_123' });
+      const createdUser = await User.findById('test_openid_123');
       expect(createdUser).toBeDefined();
       expect(createdUser.username).toBe('new_user');
     });
@@ -263,7 +262,7 @@ describe('WeChat Auth Controller Test', () => {
 
     test('should return error when user already exists', async () => {
       await createTestUser({
-        openid: 'test_openid_123',
+        _id: 'test_openid_123',  // openid作为主键
         username: 'existing_user'
       });
 

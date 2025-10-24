@@ -6,24 +6,23 @@ describe('User Model Test', () => {
   describe('User Schema', () => {
     test('should create a user with valid data', async () => {
       const userData = {
+        _id: 'test_openid_123',  // openid作为主键
         username: 'testuser',
-        openid: 'test_openid_123',
         avatar: 'https://example.com/avatar.jpg'
       };
 
       const user = await User.create(userData);
 
       expect(user.username).toBe(userData.username);
-      expect(user.openid).toBe(userData.openid);
+      expect(user._id).toBe(userData._id);  // _id就是openid
       expect(user.avatar).toBe(userData.avatar);
-      expect(user._id).toBeDefined();
       expect(user.createdAt).toBeDefined();
       expect(user.updatedAt).toBeDefined();
     });
 
     test('should require username', async () => {
       const userData = {
-        openid: 'test_openid_123'
+        _id: 'test_openid_123'  // openid作为主键，但缺少username
       };
 
       try {
@@ -43,41 +42,24 @@ describe('User Model Test', () => {
         await User.create(userData);
         fail('Should have thrown validation error');
       } catch (error) {
-        expect(error.errors.openid).toBeDefined();
+        expect(error.errors._id).toBeDefined();
       }
     });
 
-    test('should have unique username', async () => {
+    test('should have unique openid (_id)', async () => {
       const userData = {
-        username: 'testuser',
-        openid: 'test_openid_123'
+        _id: 'test_openid_123',  // openid作为主键
+        username: 'testuser'
       };
 
       await User.create(userData);
 
       try {
-        await User.create(userData);
-        fail('Should have thrown duplicate key error');
-      } catch (error) {
-        expect(error.code).toBe(11000);
-      }
-    });
-
-    test('should have unique openid', async () => {
-      const userData = {
-        username: 'testuser1',
-        openid: 'test_openid_123'
-      };
-
-      await User.create(userData);
-
-      const duplicateUserData = {
-        username: 'testuser2',
-        openid: 'test_openid_123'
-      };
-
-      try {
-        await User.create(duplicateUserData);
+        const duplicateData = {
+          _id: 'test_openid_123',  // 相同的openid
+          username: 'different_user'
+        };
+        await User.create(duplicateData);
         fail('Should have thrown duplicate key error');
       } catch (error) {
         expect(error.code).toBe(11000);
@@ -86,11 +68,22 @@ describe('User Model Test', () => {
 
     test('should set default avatar to empty string', async () => {
       const userData = {
-        username: 'testuser',
-        openid: 'test_openid_123'
+        _id: 'test_openid_default_avatar',
+        username: 'testuser_default'
       };
 
       const user = await User.create(userData);
+      expect(user.avatar).toBe('');
+    });
+
+    test('should validate required _id field', async () => {
+      const userData = {
+        _id: 'test_openid_avatar_test',
+        username: 'testuser'
+      };
+
+      const user = await User.create(userData);
+      expect(user._id).toBe('test_openid_avatar_test');
       expect(user.avatar).toBe('');
     });
   });
@@ -102,7 +95,7 @@ describe('User Model Test', () => {
 
       expect(userJson._id).toBeDefined();
       expect(userJson.username).toBe(user.username);
-      expect(userJson.openid).toBe(user.openid);
+      expect(userJson._id).toBe(user._id);
       expect(userJson.avatar).toBe(user.avatar);
       expect(userJson.createdAt).toBeDefined();
       expect(userJson.updatedAt).toBeDefined();

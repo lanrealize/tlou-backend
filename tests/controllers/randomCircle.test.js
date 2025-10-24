@@ -42,7 +42,7 @@ describe('随机Public朋友圈控制器测试', () => {
     mockReq = {
       user: testUser1,  // 保留以兼容旧测试
       query: {
-        openid: testUser1.openid  // 添加 openid 让 controller 能识别用户
+        openid: testUser1._id  // 添加 openid 让 controller 能识别用户
       }
     };
 

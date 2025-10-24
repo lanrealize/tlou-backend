@@ -95,7 +95,7 @@ describe('WeChat Integration Test', () => {
   describe('POST /api/wechat/get-user-info', () => {
     test('should return user info when user exists', async () => {
       const existingUser = await createTestUser({
-        openid: 'test_openid_123',
+        _id: 'test_openid_123',  // openid作为主键
         username: 'test_user',
         avatar: 'https://example.com/avatar.jpg'
       });
@@ -110,8 +110,7 @@ describe('WeChat Integration Test', () => {
         message: '获取用户信息成功',
         data: {
           user: {
-            _id: existingUser._id.toString(),
-            openid: 'test_openid_123',
+            _id: 'test_openid_123',  // _id就是openid
             username: 'test_user',
             avatar: 'https://example.com/avatar.jpg',
             isAdmin: false
@@ -162,7 +161,7 @@ describe('WeChat Integration Test', () => {
         message: '用户注册成功',
         data: {
           user: expect.objectContaining({
-            openid: 'test_openid_123',
+            _id: 'test_openid_123',  // _id就是openid
             username: 'new_user',
             avatar: 'https://example.com/avatar.jpg'
           })
@@ -217,7 +216,7 @@ describe('WeChat Integration Test', () => {
 
     test('should return error when user already exists', async () => {
       await createTestUser({
-        openid: 'test_openid_123',
+        _id: 'test_openid_123',  // openid作为主键
         username: 'existing_user'
       });
 
@@ -270,7 +269,7 @@ describe('WeChat Integration Test', () => {
         })
         .expect(201);
 
-      expect(registerResponse.body.data.user.openid).toBe('flow_test_openid');
+      expect(registerResponse.body.data.user._id).toBe('flow_test_openid');
 
       // 再次检查用户信息，应该存在了
       const userInfoResponse2 = await request(app)

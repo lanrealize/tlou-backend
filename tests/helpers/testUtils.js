@@ -6,11 +6,17 @@ const Post = require('../../models/Post');
 // 生成测试用户
 const createTestUser = async (userData = {}) => {
   const defaultUser = {
+    _id: userData._id || `test_openid_${Date.now()}`,  // openid作为主键
     username: `testuser_${Date.now()}`,
-    openid: `test_openid_${Date.now()}`,
     avatar: 'https://example.com/avatar.jpg',
     ...userData
   };
+  
+  // 移除重复的_id，避免覆盖
+  if (userData._id) {
+    delete defaultUser._id;
+    defaultUser._id = userData._id;
+  }
   
   return await User.create(defaultUser);
 };

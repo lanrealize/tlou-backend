@@ -11,8 +11,8 @@ async function checkOpenid(req, res, next) {
       return next(new AppError('缺少openid参数', 401));
     }
 
-    // 验证openid是否存在
-    const user = await User.findOne({ openid });
+    // 验证openid是否存在（现在openid就是主键_id）
+    const user = await User.findById(openid);
     
     if (!user) {
       return next(new AppError('用户不存在或openid无效', 401));

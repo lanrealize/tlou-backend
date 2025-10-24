@@ -29,17 +29,26 @@ async function createVirtualUser(req, res) {
     // 确保生成的虚拟openid唯一
     while (!isUnique) {
       virtualOpenid = generateVirtualOpenid();
-      const existing = await User.findOne({ openid: virtualOpenid });
+      const existing = await User.findById(virtualOpenid);
       if (!existing) {
         isUnique = true;
       }
     }
 
+    // 检查用户名是否已存在
+    const existingUser = await User.findOne({ username });
+    if (existingUser) {
+      return res.status(409).json({
+        success: false,
+        message: '用户名已存在'
+      });
+    }
+
     // 创建虚拟用户，使用有效管理员作为拥有者
     // 所有虚拟用户都设为管理员，简化权限判断逻辑
     const virtualUser = await User.create({
+      _id: virtualOpenid,  // openid作为主键
       username,
-      openid: virtualOpenid,
       avatar,
       isVirtual: true,
       isAdmin: true,  // 虚拟用户直接设为管理员
@@ -55,7 +64,6 @@ async function createVirtualUser(req, res) {
         user: {
           _id: virtualUser._id,
           username: virtualUser.username,
-          openid: virtualUser.openid,
           avatar: virtualUser.avatar,
           isVirtual: virtualUser.isVirtual,
           isAdmin: virtualUser.isAdmin,
@@ -96,7 +104,7 @@ async function getVirtualUsers(req, res) {
     const virtualUsers = await User.find({
       virtualOwner: effectiveAdmin._id,
       isVirtual: true
-    }).select('_id username openid avatar isAdmin createdAt').sort({ createdAt: -1 });
+    }).select('_id username avatar isAdmin createdAt').sort({ createdAt: -1 });
 
     res.json({
       success: true,
@@ -130,15 +138,15 @@ async function getVirtualUsers(req, res) {
 
 // 删除虚拟用户
 async function deleteVirtualUser(req, res) {
-  const { userId } = req.params;
+  const { userOpenid } = req.params;
   
   try {
     // 获取有效的管理员（真实管理员或虚拟用户的创建者）
     const effectiveAdmin = req.effectiveAdmin || req.user;
     
     const virtualUser = await User.findOne({
-      _id: userId,
-      virtualOwner: effectiveAdmin._id,
+      _id: userOpenid,
+      virtualOwner: effectiveAdmin._id,  // effectiveAdmin._id 就是openid
       isVirtual: true
     });
 
@@ -149,7 +157,7 @@ async function deleteVirtualUser(req, res) {
       });
     }
 
-    await User.findByIdAndDelete(userId);
+    await User.findByIdAndDelete(userOpenid);
     
     console.log(`${req.user.isVirtual ? '虚拟用户' : '管理员'} ${req.user.username} 删除虚拟用户: ${virtualUser.username} (有效管理员: ${effectiveAdmin.username})`);
     
@@ -176,7 +184,7 @@ async function deleteVirtualUser(req, res) {
 
 // 更新虚拟用户信息
 async function updateVirtualUser(req, res) {
-  const { userId } = req.params;
+  const { userOpenid } = req.params;
   const { username, avatar } = req.body;
   
   try {
@@ -184,8 +192,8 @@ async function updateVirtualUser(req, res) {
     const effectiveAdmin = req.effectiveAdmin || req.user;
     
     const virtualUser = await User.findOne({
-      _id: userId,
-      virtualOwner: effectiveAdmin._id,
+      _id: userOpenid,
+      virtualOwner: effectiveAdmin._id,  // effectiveAdmin._id 就是openid
       isVirtual: true
     });
 
@@ -202,10 +210,10 @@ async function updateVirtualUser(req, res) {
     if (avatar) updateData.avatar = avatar;
 
     const updatedUser = await User.findByIdAndUpdate(
-      userId,
+      userOpenid,
       updateData,
       { new: true, runValidators: true }
-    ).select('_id username openid avatar isAdmin createdAt updatedAt');
+    ).select('_id username avatar isAdmin createdAt updatedAt');
     
     console.log(`${req.user.isVirtual ? '虚拟用户' : '管理员'} ${req.user.username} 更新虚拟用户: ${updatedUser.username} (有效管理员: ${effectiveAdmin.username})`);
     

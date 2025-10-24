@@ -35,7 +35,7 @@ describe('Posts Routes Test', () => {
         circleId: testCircle._id.toString(),
         content: '测试帖子内容',
         images: ['image1.jpg', 'image2.jpg'],
-        openid: testUser.openid
+        openid: testUser._id
       };
 
       const response = await request(app)
@@ -66,7 +66,7 @@ describe('Posts Routes Test', () => {
           { url: 'https://tlou.images.wltech-service.site/image1.jpg', width: 300, height: 200 },
           { url: 'https://tlou.images.wltech-service.site/image2.jpg', width: 400, height: 300 }
         ],
-        openid: testUser.openid
+        openid: testUser._id
       };
 
       const response = await request(app)
@@ -100,7 +100,7 @@ describe('Posts Routes Test', () => {
           'oldformat.jpg',  // 旧格式：直接URL字符串
           { url: 'https://tlou.images.wltech-service.site/newformat.jpg', width: 320, height: 240 }  // 新格式：对象
         ],
-        openid: testUser.openid
+        openid: testUser._id
       };
 
       const response = await request(app)
@@ -129,7 +129,7 @@ describe('Posts Routes Test', () => {
     test('should return 400 when circleId is missing', async () => {
       const postData = {
         content: '测试帖子内容',
-        openid: testUser.openid
+        openid: testUser._id
       };
 
       const response = await request(app)
@@ -147,7 +147,7 @@ describe('Posts Routes Test', () => {
       const postData = {
         circleId: 'invalid_id',
         content: '测试帖子内容',
-        openid: testUser.openid
+        openid: testUser._id
       };
 
       const response = await request(app)
@@ -166,7 +166,7 @@ describe('Posts Routes Test', () => {
       const postData = {
         circleId: fakeId,
         content: '测试帖子内容',
-        openid: testUser.openid
+        openid: testUser._id
       };
 
       const response = await request(app)
@@ -200,7 +200,7 @@ describe('Posts Routes Test', () => {
           'https://example.com/bad-image.jpg',
           'https://example.com/good-image.jpg'
         ],
-        openid: testUser.openid
+        openid: testUser._id
       };
 
       const response = await request(app)
@@ -244,7 +244,7 @@ describe('Posts Routes Test', () => {
           'https://example.com/good-image1.jpg',
           'https://example.com/good-image2.jpg'
         ],
-        openid: testUser.openid
+        openid: testUser._id
       };
 
       const response = await request(app)
@@ -264,7 +264,7 @@ describe('Posts Routes Test', () => {
       const postData = {
         circleId: testCircle._id.toString(),
         content: '测试帖子内容',
-        openid: nonMember.openid
+        openid: nonMember._id
       };
 
       const response = await request(app)
@@ -302,7 +302,7 @@ describe('Posts Routes Test', () => {
         images: [
           { url: 'https://example.com/image.jpg' }  // 缺少width和height
         ],
-        openid: testUser.openid
+        openid: testUser._id
       };
 
       const response = await request(app)
@@ -323,7 +323,7 @@ describe('Posts Routes Test', () => {
         images: [
           { url: '', width: 100, height: 100 }  // 空URL
         ],
-        openid: testUser.openid
+        openid: testUser._id
       };
 
       const response = await request(app)
@@ -344,7 +344,7 @@ describe('Posts Routes Test', () => {
         images: [
           { url: 'https://example.com/image.jpg', width: -100, height: 100 }  // 负数宽度
         ],
-        openid: testUser.openid
+        openid: testUser._id
       };
 
       const response = await request(app)
@@ -389,7 +389,7 @@ describe('Posts Routes Test', () => {
         .get('/api/posts')
         .query({ 
           circleId: testCircle._id.toString(),
-          openid: testUser.openid 
+          openid: testUser._id 
         })
         .expect(200);
 
@@ -412,7 +412,7 @@ describe('Posts Routes Test', () => {
     test('should return 400 when circleId is missing', async () => {
       const response = await request(app)
         .get('/api/posts')
-        .query({ openid: testUser.openid })
+        .query({ openid: testUser._id })
         .expect(400);
 
       expect(response.body).toEqual({
@@ -428,7 +428,7 @@ describe('Posts Routes Test', () => {
         .get('/api/posts')
         .query({ 
           circleId: fakeId,
-          openid: testUser.openid 
+          openid: testUser._id 
         })
         .expect(404);
 
@@ -449,7 +449,7 @@ describe('Posts Routes Test', () => {
         .get('/api/posts')
         .query({ 
           circleId: privateCircle._id.toString(),
-          openid: nonMember.openid 
+          openid: nonMember._id 
         })
         .expect(403);
 
@@ -474,7 +474,7 @@ describe('Posts Routes Test', () => {
         .get('/api/posts')
         .query({ 
           circleId: testCircle._id.toString(),
-          openid: testUser.openid 
+          openid: testUser._id 
         })
         .expect(200);
 
@@ -497,7 +497,7 @@ describe('Posts Routes Test', () => {
     test('should like post successfully', async () => {
       const response = await request(app)
         .post(`/api/posts/${testPost._id}/like`)
-        .send({ openid: testUser.openid })
+        .send({ openid: testUser._id })
         .expect(200);
 
       expect(response.body).toEqual({
@@ -522,7 +522,7 @@ describe('Posts Routes Test', () => {
 
       const response = await request(app)
         .post(`/api/posts/${testPost._id}/like`)
-        .send({ openid: testUser.openid })
+        .send({ openid: testUser._id })
         .expect(200);
 
       expect(response.body).toEqual({
@@ -540,7 +540,7 @@ describe('Posts Routes Test', () => {
 
       const response = await request(app)
         .post(`/api/posts/${fakeId}/like`)
-        .send({ openid: testUser.openid })
+        .send({ openid: testUser._id })
         .expect(404);
 
       expect(response.body).toEqual({
@@ -554,7 +554,7 @@ describe('Posts Routes Test', () => {
     test('should delete own post successfully', async () => {
       const response = await request(app)
         .delete(`/api/posts/${testPost._id}`)
-        .send({ openid: testUser.openid })
+        .send({ openid: testUser._id })
         .expect(200);
 
       expect(response.body).toEqual({
@@ -594,7 +594,7 @@ describe('Posts Routes Test', () => {
 
       const response = await request(app)
         .delete(`/api/posts/${postWithImages._id}`)
-        .send({ openid: testUser.openid })
+        .send({ openid: testUser._id })
         .expect(200);
 
       expect(response.body).toEqual({
@@ -623,7 +623,7 @@ describe('Posts Routes Test', () => {
 
       const response = await request(app)
         .delete(`/api/posts/${fakeId}`)
-        .send({ openid: testUser.openid })
+        .send({ openid: testUser._id })
         .expect(404);
 
       expect(response.body).toEqual({
@@ -638,7 +638,7 @@ describe('Posts Routes Test', () => {
 
       const response = await request(app)
         .delete(`/api/posts/${otherPost._id}`)
-        .send({ openid: testUser.openid })
+        .send({ openid: testUser._id })
         .expect(404);
 
       expect(response.body).toEqual({
@@ -652,7 +652,7 @@ describe('Posts Routes Test', () => {
     test('should add comment successfully', async () => {
       const commentData = {
         content: '测试评论',
-        openid: testUser.openid
+        openid: testUser._id
       };
 
       const response = await request(app)
@@ -674,8 +674,8 @@ describe('Posts Routes Test', () => {
       const replyToUser = await createTestUser();
       const commentData = {
         content: '回复评论',
-        replyToUserId: replyToUser._id.toString(),
-        openid: testUser.openid
+        replyToUserOpenid: replyToUser._id,  // 直接使用openid
+        openid: testUser._id
       };
 
       const response = await request(app)
@@ -695,7 +695,7 @@ describe('Posts Routes Test', () => {
 
     test('should return 400 when content is missing', async () => {
       const commentData = {
-        openid: testUser.openid
+        openid: testUser._id
       };
 
       const response = await request(app)
@@ -713,7 +713,7 @@ describe('Posts Routes Test', () => {
       const fakeId = '507f1f77bcf86cd799439011';
       const commentData = {
         content: '测试评论',
-        openid: testUser.openid
+        openid: testUser._id
       };
 
       const response = await request(app)
@@ -727,21 +727,21 @@ describe('Posts Routes Test', () => {
       });
     });
 
-    test('should return 404 when replyToUserId is invalid', async () => {
+    test('should return 404 when replyToUserOpenid is invalid', async () => {
       const commentData = {
         content: '回复评论',
-        replyToUserId: 'invalid_user_id',
-        openid: testUser.openid
+        replyToUserOpenid: 'invalid_user_openid',
+        openid: testUser._id
       };
 
       const response = await request(app)
         .post(`/api/posts/${testPost._id}/comments`)
         .send(commentData)
-        .expect(400);
+        .expect(404);
 
       expect(response.body).toEqual({
         status: 'fail',
-        message: '输入验证失败: 无效的回复用户ID'
+        message: '回复的用户不存在'
       });
     });
   });
@@ -764,7 +764,7 @@ describe('Posts Routes Test', () => {
 
       const response = await request(app)
         .delete(`/api/posts/${testPost._id}/comments/${comment._id}`)
-        .send({ openid: testUser.openid })
+        .send({ openid: testUser._id })
         .expect(200);
 
       expect(response.body).toEqual({
@@ -779,7 +779,7 @@ describe('Posts Routes Test', () => {
 
       const response = await request(app)
         .delete(`/api/posts/${fakePostId}/comments/${fakeCommentId}`)
-        .send({ openid: testUser.openid })
+        .send({ openid: testUser._id })
         .expect(404);
 
       expect(response.body).toEqual({
@@ -793,7 +793,7 @@ describe('Posts Routes Test', () => {
 
       const response = await request(app)
         .delete(`/api/posts/${testPost._id}/comments/${fakeCommentId}`)
-        .send({ openid: testUser.openid })
+        .send({ openid: testUser._id })
         .expect(404);
 
       expect(response.body).toEqual({
@@ -819,7 +819,7 @@ describe('Posts Routes Test', () => {
 
       const response = await request(app)
         .delete(`/api/posts/${testPost._id}/comments/${comment._id}`)
-        .send({ openid: testUser.openid })
+        .send({ openid: testUser._id })
         .expect(403);
 
       expect(response.body).toEqual({

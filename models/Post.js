@@ -2,7 +2,7 @@ const mongoose = require('mongoose');
 
 const postSchema = new mongoose.Schema({
   author: {
-    type: mongoose.Schema.Types.ObjectId,
+    type: String,  // openid
     ref: 'User',
     required: true
   },
@@ -39,7 +39,7 @@ const postSchema = new mongoose.Schema({
     default: []
   },
   likes: [{
-    type: mongoose.Schema.Types.ObjectId,
+    type: String,  // openid数组
     ref: 'User'
   }],
   comments: [{
@@ -48,7 +48,7 @@ const postSchema = new mongoose.Schema({
       default: mongoose.Types.ObjectId
     },
     author: {
-      type: mongoose.Schema.Types.ObjectId,
+      type: String,  // openid
       ref: 'User',
       required: true
     },
@@ -57,7 +57,7 @@ const postSchema = new mongoose.Schema({
       required: true
     },
     replyTo: {
-      type: mongoose.Schema.Types.ObjectId,
+      type: String,  // openid
       ref: 'User',
       default: null
     },

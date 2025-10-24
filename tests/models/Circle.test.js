@@ -166,7 +166,7 @@ describe('Circle Model Test', () => {
       
       expect(populatedCircle.creator).toBeDefined();
       expect(populatedCircle.creator.username).toBe(creator.username);
-      expect(populatedCircle.creator.openid).toBe(creator.openid);
+      expect(populatedCircle.creator._id).toBe(creator._id);
     });
 
     test('should populate members correctly', async () => {

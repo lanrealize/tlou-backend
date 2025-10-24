@@ -7,7 +7,7 @@ describe('OpenID Auth Middleware Test', () => {
     test('should pass with valid openid in body', async () => {
       const user = await createTestUser();
       const req = createMockRequest({
-        body: { openid: user.openid }
+        body: { openid: user._id }
       });
       const res = createMockResponse();
       const next = createMockNext();
@@ -17,13 +17,13 @@ describe('OpenID Auth Middleware Test', () => {
       expect(next).toHaveBeenCalledWith();
       expect(req.user).toBeDefined();
       expect(req.user._id.toString()).toBe(user._id.toString());
-      expect(req.user.openid).toBe(user.openid);
+      expect(req.user._id).toBe(user._id);
     });
 
     test('should pass with valid openid in query', async () => {
       const user = await createTestUser();
       const req = createMockRequest({
-        query: { openid: user.openid }
+        query: { openid: user._id }
       });
       const res = createMockResponse();
       const next = createMockNext();
@@ -38,7 +38,7 @@ describe('OpenID Auth Middleware Test', () => {
     test('should pass with valid openid in headers', async () => {
       const user = await createTestUser();
       const req = createMockRequest({
-        headers: { 'x-openid': user.openid }
+        headers: { 'x-openid': user._id }
       });
       const res = createMockResponse();
       const next = createMockNext();
@@ -96,7 +96,7 @@ describe('OpenID Auth Middleware Test', () => {
     test('should prioritize body over query and headers', async () => {
       const user = await createTestUser();
       const req = createMockRequest({
-        body: { openid: user.openid },
+        body: { openid: user._id },
         query: { openid: 'wrong_openid' },
         headers: { 'x-openid': 'wrong_openid' }
       });
@@ -107,14 +107,14 @@ describe('OpenID Auth Middleware Test', () => {
 
       expect(next).toHaveBeenCalledWith();
       expect(req.user).toBeDefined();
-      expect(req.user.openid).toBe(user.openid);
+      expect(req.user._id).toBe(user._id);
     });
 
     test('should prioritize query over headers when body is empty', async () => {
       const user = await createTestUser();
       const req = createMockRequest({
         body: {},
-        query: { openid: user.openid },
+        query: { openid: user._id },
         headers: { 'x-openid': 'wrong_openid' }
       });
       const res = createMockResponse();
@@ -124,7 +124,7 @@ describe('OpenID Auth Middleware Test', () => {
 
       expect(next).toHaveBeenCalledWith();
       expect(req.user).toBeDefined();
-      expect(req.user.openid).toBe(user.openid);
+      expect(req.user._id).toBe(user._id);
     });
 
     test('should handle database errors gracefully', async () => {

@@ -33,10 +33,10 @@ router.post('/virtual-users', [
 router.get('/virtual-users', catchAsync(getVirtualUsers));
 
 // 更新虚拟用户
-router.put('/virtual-users/:userId', [
-  param('userId')
-    .isMongoId()
-    .withMessage('无效的用户ID'),
+router.put('/virtual-users/:userOpenid', [
+  param('userOpenid')
+    .notEmpty()
+    .withMessage('用户openid不能为空'),
   body('username')
     .optional()
     .isLength({ min: 1, max: 20 })
@@ -48,10 +48,10 @@ router.put('/virtual-users/:userId', [
 ], catchAsync(updateVirtualUser));
 
 // 删除虚拟用户
-router.delete('/virtual-users/:userId', [
-  param('userId')
-    .isMongoId()
-    .withMessage('无效的用户ID')
+router.delete('/virtual-users/:userOpenid', [
+  param('userOpenid')
+    .notEmpty()
+    .withMessage('用户openid不能为空')
 ], catchAsync(deleteVirtualUser));
 
 module.exports = router;

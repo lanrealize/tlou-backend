@@ -7,16 +7,16 @@ const circleSchema = new mongoose.Schema({
     maxlength: 50
   },
   creator: {
-    type: mongoose.Schema.Types.ObjectId,
+    type: String,  // openid
     ref: 'User',
     required: true
   },
   members: [{
-    type: mongoose.Schema.Types.ObjectId,
+    type: String,  // openid数组
     ref: 'User'
   }],
   appliers: [{
-    type: mongoose.Schema.Types.ObjectId,
+    type: String,  // openid数组
     ref: 'User'
   }],
   isPublic: {
@@ -59,66 +59,34 @@ circleSchema.index({ isPublic: 1, latestActivityTime: -1 });
 circleSchema.index({ isPublic: 1, createdAt: -1 });
 
 // 检查用户是否是成员
-circleSchema.methods.isMember = function(userId) {
-  const userIdStr = userId.toString();
-  
+circleSchema.methods.isMember = function(userOpenid) {
   // 检查是否是创建者
-  const creatorId = this.creator._id ? this.creator._id.toString() : this.creator.toString();
-  if (creatorId === userIdStr) {
+  if (this.creator === userOpenid) {
     return true;
   }
   
-  // 检查是否在成员列表中（兼容 populate 和未 populate 两种情况）
-  return this.members.some(member => {
-    const memberId = member._id ? member._id.toString() : member.toString();
-    return memberId === userIdStr;
-  });
+  // 检查是否在成员列表中
+  return this.members.includes(userOpenid);
 };
 
 // 检查用户是否已申请加入
-circleSchema.methods.isApplier = function(userId) {
-  const userIdStr = userId.toString();
-  
-  // 兼容 populate 和未 populate 两种情况
-  return this.appliers.some(applier => {
-    const applierId = applier._id ? applier._id.toString() : applier.toString();
-    return applierId === userIdStr;
-  });
+circleSchema.methods.isApplier = function(userOpenid) {
+  // 直接使用includes检查
+  return this.appliers.includes(userOpenid);
 };
 
 // 检查用户是否是创建者
-circleSchema.methods.isCreator = function(userId) {
-  const userIdStr = userId.toString();
-  // 兼容 populate 和未 populate 两种情况
-  const creatorId = this.creator._id ? this.creator._id.toString() : this.creator.toString();
-  return creatorId === userIdStr;
+circleSchema.methods.isCreator = function(userOpenid) {
+  // 直接比较openid
+  return this.creator === userOpenid;
 };
 
 // 检查用户是否有任何角色（creator, member, applier中的任意一种）
-// 优化：避免重复检查 creator
-circleSchema.methods.hasAnyRole = function(userId) {
-  const userIdStr = userId.toString();
-  
-  // 1. 先检查 creator（最快，单次比较）
-  const creatorId = this.creator._id ? this.creator._id.toString() : this.creator.toString();
-  if (creatorId === userIdStr) {
-    return true;
-  }
-  
-  // 2. 检查 members（需要遍历数组）
-  const isMember = this.members.some(member => {
-    const memberId = member._id ? member._id.toString() : member.toString();
-    return memberId === userIdStr;
-  });
-  if (isMember) {
-    return true;
-  }
-  
-  // 3. 最后检查 appliers（需要遍历数组）
-  return this.appliers.some(applier => {
-    const applierId = applier._id ? applier._id.toString() : applier.toString();
-    return applierId === userIdStr;
-  });
+circleSchema.methods.hasAnyRole = function(userOpenid) {
+  // 直接使用已有的方法，现在非常简洁
+  return this.isCreator(userOpenid) || 
+         this.isMember(userOpenid) || 
+         this.isApplier(userOpenid);
 };
 
 // 更新成员统计

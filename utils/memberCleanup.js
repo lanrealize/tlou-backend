@@ -44,15 +44,14 @@ async function deletePostsWithImages(query, deleteImages = false) {
  * 清理用户在朋友圈的所有痕迹
  * 包括：用户的帖子、评论、点赞、以及指向该用户的回复引用
  * 
- * @param {ObjectId} userId - 用户ID
+ * @param {String} userOpenid - 用户openid
  * @param {ObjectId} circleId - 朋友圈ID
  * @param {Object} options - 可选配置
  * @param {Boolean} options.deleteQiniuImages - 是否删除七牛云图片（默认 false）
  * @returns {Object} 清理统计信息
  */
-async function cleanupUserInCircle(userId, circleId, options = {}) {
+async function cleanupUserInCircle(userOpenid, circleId, options = {}) {
   const { deleteQiniuImages = false } = options;
-  const userIdStr = userId.toString();
   
   const stats = {
     deletedPosts: 0,
@@ -64,7 +63,7 @@ async function cleanupUserInCircle(userId, circleId, options = {}) {
   try {
     // 1. 删除用户在该朋友圈的所有帖子（可选：同时删除七牛云图片）
     stats.deletedPosts = await deletePostsWithImages(
-      { author: userId, circle: circleId },
+      { author: userOpenid, circle: circleId },
       deleteQiniuImages
     );
 
@@ -73,7 +72,7 @@ async function cleanupUserInCircle(userId, circleId, options = {}) {
       { circle: circleId },
       {
         $pull: {
-          comments: { author: userId }
+          comments: { author: userOpenid }
         }
       }
     );
@@ -84,7 +83,7 @@ async function cleanupUserInCircle(userId, circleId, options = {}) {
       { circle: circleId },
       {
         $pull: {
-          likes: userId
+          likes: userOpenid
         }
       }
     );
@@ -94,7 +93,7 @@ async function cleanupUserInCircle(userId, circleId, options = {}) {
     // 找到所有包含指向该用户的 replyTo 的帖子
     const postsWithReplyTo = await Post.find({
       circle: circleId,
-      'comments.replyTo': userId
+      'comments.replyTo': userOpenid
     });
 
     // 逐个更新帖子，将 replyTo 设为 null
@@ -102,7 +101,7 @@ async function cleanupUserInCircle(userId, circleId, options = {}) {
     for (const post of postsWithReplyTo) {
       // 直接修改评论文档的 replyTo 字段
       post.comments.forEach(comment => {
-        if (comment.replyTo && comment.replyTo.toString() === userIdStr) {
+        if (comment.replyTo && comment.replyTo === userOpenid) {
           comment.replyTo = null;
           clearedCount++;
         }
