@@ -102,6 +102,7 @@ router.post('/:id/join', checkOpenid, catchAsync(async (req, res) => {
   }
 
   await Circle.findByIdAndUpdate(req.params.id, {
+    $pull: { appliers: req.user._id },
     $push: { members: req.user._id }
   });
 
