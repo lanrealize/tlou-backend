@@ -41,8 +41,10 @@ echo "步骤 1/6: 拉取最新代码..."
 echo "======================================"
 cd ${PROJECT_DIR}
 echo "当前目录: \$(pwd)"
-git pull origin master
-echo "✓ 代码拉取完成"
+echo "强制使用远程仓库代码，丢弃本地更改..."
+git fetch origin master
+git reset --hard origin/master
+echo "✓ 代码强制同步完成"
 echo ""
 
 echo "======================================"

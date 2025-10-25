@@ -60,25 +60,35 @@ circleSchema.index({ isPublic: 1, createdAt: -1 });
 
 // 检查用户是否是成员
 circleSchema.methods.isMember = function(userOpenid) {
+  // 获取creator的ID（处理populate情况）
+  const creatorId = typeof this.creator === 'object' ? this.creator._id : this.creator;
+  
   // 检查是否是创建者
-  if (this.creator === userOpenid) {
+  if (creatorId === userOpenid) {
     return true;
   }
   
-  // 检查是否在成员列表中
-  return this.members.includes(userOpenid);
+  // 检查是否在成员列表中（处理populate情况）
+  return this.members.some(member => {
+    const memberId = typeof member === 'object' ? member._id : member;
+    return memberId === userOpenid;
+  });
 };
 
 // 检查用户是否已申请加入
 circleSchema.methods.isApplier = function(userOpenid) {
-  // 直接使用includes检查
-  return this.appliers.includes(userOpenid);
+  // 处理populate情况
+  return this.appliers.some(applier => {
+    const applierId = typeof applier === 'object' ? applier._id : applier;
+    return applierId === userOpenid;
+  });
 };
 
-// 检查用户是否是创建者
+// 检查用户是否是创建者  
 circleSchema.methods.isCreator = function(userOpenid) {
-  // 直接比较openid
-  return this.creator === userOpenid;
+  // 获取creator的ID（处理populate情况）
+  const creatorId = typeof this.creator === 'object' ? this.creator._id : this.creator;
+  return creatorId === userOpenid;
 };
 
 // 检查用户是否有任何角色（creator, member, applier中的任意一种）

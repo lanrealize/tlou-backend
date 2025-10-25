@@ -363,73 +363,32 @@ router.get('/:id', checkOpenid, requirePermission('circle', 'access'), catchAsyn
   
   const circle = await Circle.findById(req.params.id)
     .populate('creator', 'username avatar')
-    .populate('members', 'username avatar')
-    .populate('appliers', 'username avatar');
+    .populate('members', 'username avatar');
+    // 移除 appliers populate，提高安全性
 
-  // 根据用户角色决定返回哪些信息
-  let responseData;
+  // 构建 currentUserStatus
+  const currentUserStatus = {
+    isMember: circle.isMember(userId),
+    hasApplied: circle.isApplier(userId),
+    isOwner: circle.isCreator(userId)
+  };
 
-  if (circle.isCreator(userId)) {
-    // 创建者：返回完整管理信息
-    responseData = {
-      _id: circle._id,
-      name: circle.name,
-      description: circle.description || '',
-      isPublic: circle.isPublic,
-      creator: circle.creator,
-      members: circle.members,
-      appliers: circle.appliers,
-      allowInvite: circle.allowInvite,
-      allowPost: circle.allowPost,
-      stats: circle.stats,
-      createdAt: circle.createdAt,
-      updatedAt: circle.updatedAt,
-      latestActivityTime: circle.latestActivityTime
-    };
-  } else if (circle.isMember(userId)) {
-    // 普通成员：返回成员信息，但不包含管理数据
-    responseData = {
-      _id: circle._id,
-      name: circle.name,
-      description: circle.description || '',
-      isPublic: circle.isPublic,
-      creator: circle.creator,
-      members: circle.members,
-      appliers: [],
-      allowInvite: circle.allowInvite,
-      allowPost: circle.allowPost,
-      stats: circle.stats,
-      createdAt: circle.createdAt,
-      latestActivityTime: circle.latestActivityTime
-    };
-  } else if (circle.isApplier(userId)) {
-    // 申请者：返回基本信息
-    responseData = {
-      _id: circle._id,
-      name: circle.name,
-      description: circle.description || '',
-      isPublic: circle.isPublic,
-      creator: circle.creator,
-      members: circle.members,
-      appliers: [],
-      memberCount: circle.members ? circle.members.length : 0,
-      createdAt: circle.createdAt,
-      latestActivityTime: circle.latestActivityTime
-    };
-  } else {
-    // 无关用户访问公开朋友圈
-    responseData = {
-      _id: circle._id,
-      name: circle.name,
-      description: circle.description || '',
-      isPublic: circle.isPublic,
-      creator: circle.creator,
-      members: circle.members,
-      memberCount: circle.members ? circle.members.length : 0,
-      createdAt: circle.createdAt,
-      latestActivityTime: circle.latestActivityTime
-    };
-  }
+  // 构建响应数据（统一格式，移除 appliers 字段）
+  const responseData = {
+    _id: circle._id,
+    name: circle.name,
+    description: circle.description || '',
+    isPublic: circle.isPublic,
+    creator: circle.creator,
+    members: circle.members,
+    allowInvite: circle.allowInvite,
+    allowPost: circle.allowPost,
+    stats: circle.stats,
+    createdAt: circle.createdAt,
+    updatedAt: circle.updatedAt,
+    latestActivityTime: circle.latestActivityTime,
+    currentUserStatus: currentUserStatus
+  };
 
   res.json({
     success: true,

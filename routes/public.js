@@ -72,7 +72,8 @@ router.get('/circles/:id', catchAsync(async (req, res) => {
     memberCount: circle.members ? circle.members.length : 0,
     stats: circle.stats,
     createdAt: circle.createdAt,
-    latestActivityTime: circle.latestActivityTime
+    latestActivityTime: circle.latestActivityTime,
+    currentUserStatus: null  // 未登录用户
   };
 
   res.json({

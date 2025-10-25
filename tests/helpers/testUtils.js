@@ -5,9 +5,13 @@ const Post = require('../../models/Post');
 
 // 生成测试用户
 const createTestUser = async (userData = {}) => {
+  const timestamp = Date.now();
+  const random = Math.floor(Math.random() * 10000);
+  const uniqueId = `${timestamp}_${random}`;
+  
   const defaultUser = {
-    _id: userData._id || `test_openid_${Date.now()}`,  // openid作为主键
-    username: `testuser_${Date.now()}`,
+    _id: userData._id || `test_openid_${uniqueId}`,  // openid作为主键
+    username: `testuser_${uniqueId}`,
     avatar: 'https://example.com/avatar.jpg',
     ...userData
   };

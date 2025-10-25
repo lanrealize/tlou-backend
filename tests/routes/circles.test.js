@@ -1008,46 +1008,148 @@ describe('Circles Routes Test', () => {
       expect(response.body.message).toBe('缺少openid参数');
     });
 
-    test('should allow logged-in users to view public circles', async () => {
+    test('should return circle with currentUserStatus for owner', async () => {
+      // 创建新的用户和朋友圈确保关系正确
+      const owner = await createTestUser();
+      const circle = await createTestCircle({ name: '测试朋友圈' }, owner);
+
+      const response = await request(app)
+        .get(`/api/circles/${circle._id}`)
+        .query({ openid: owner._id })
+        .expect(200);
+
+      expect(response.body).toEqual({
+        success: true,
+        data: {
+          circle: expect.objectContaining({
+            _id: circle._id.toString(),
+            name: circle.name,
+            creator: expect.any(Object),
+            members: expect.any(Array),
+            currentUserStatus: {
+              isMember: true,
+              hasApplied: false,
+              isOwner: true
+            }
+          })
+        }
+      });
+
+      // 确保appliers字段不存在
+      expect(response.body.data.circle.appliers).toBeUndefined();
+    });
+
+    test('should return circle with currentUserStatus for member', async () => {
+      // 创建新的用户和朋友圈，然后添加成员
+      const owner = await createTestUser();
+      const member = await createTestUser();
+      const circle = await createTestCircle({ name: '测试朋友圈' }, owner);
+      await circle.updateOne({ $push: { members: member._id } });
+
+      const response = await request(app)
+        .get(`/api/circles/${circle._id}`)
+        .query({ openid: member._id })
+        .expect(200);
+
+      expect(response.body.data.circle.currentUserStatus).toEqual({
+        isMember: true,
+        hasApplied: false,
+        isOwner: false
+      });
+
+      // 确保appliers字段不存在
+      expect(response.body.data.circle.appliers).toBeUndefined();
+    });
+
+    test('should return circle with currentUserStatus for applier', async () => {
+      // 创建新的用户和朋友圈，然后添加申请者
+      const owner = await createTestUser();
+      const applicant = await createTestUser();
       const publicCircle = await createTestCircle({
         name: '公开朋友圈',
         isPublic: true
-      }, testUser);
+      }, owner);
+      await publicCircle.updateOne({ $push: { appliers: applicant._id } });
 
-      // 提供openid
       const response = await request(app)
         .get(`/api/circles/${publicCircle._id}`)
-        .query({ openid: testUser._id })
+        .query({ openid: applicant._id })
         .expect(200);
 
-      expect(response.body.success).toBe(true);
-      expect(response.body.data.circle._id).toBe(publicCircle._id.toString());
+      expect(response.body.data.circle.currentUserStatus).toEqual({
+        isMember: false,
+        hasApplied: true,
+        isOwner: false
+      });
+
+      // 确保appliers字段不存在
+      expect(response.body.data.circle.appliers).toBeUndefined();
+    });
+
+    test('should return circle with currentUserStatus for non-member of public circle', async () => {
+      // 创建新的用户和朋友圈，局外人访问
+      const owner = await createTestUser();
+      const outsider = await createTestUser();
+      const publicCircle = await createTestCircle({
+        name: '公开朋友圈',
+        isPublic: true
+      }, owner);
+
+      const response = await request(app)
+        .get(`/api/circles/${publicCircle._id}`)
+        .query({ openid: outsider._id })
+        .expect(200);
+
+      expect(response.body.data.circle.currentUserStatus).toEqual({
+        isMember: false,
+        hasApplied: false,
+        isOwner: false
+      });
+
+      // 确保appliers字段不存在
+      expect(response.body.data.circle.appliers).toBeUndefined();
     });
   });
 
   describe('GET /api/public/circles/:id - Public Circle API (no auth required)', () => {
     test('should allow anyone to view public circles without auth', async () => {
+      // 创建新的用户和公开朋友圈
+      const owner = await createTestUser();
       const publicCircle = await createTestCircle({
         name: '公开朋友圈',
         isPublic: true
-      }, testUser);
+      }, owner);
 
       // 不提供openid - 使用公开API
       const response = await request(app)
         .get(`/api/public/circles/${publicCircle._id}`)
         .expect(200);
 
-      expect(response.body.success).toBe(true);
-      expect(response.body.data.circle._id).toBe(publicCircle._id.toString());
-      expect(response.body.data.circle.name).toBe('公开朋友圈');
-      expect(response.body.data.circle.isPublic).toBe(true);
+      expect(response.body).toEqual({
+        success: true,
+        data: {
+          circle: expect.objectContaining({
+            _id: publicCircle._id.toString(),
+            name: '公开朋友圈',
+            isPublic: true,
+            creator: expect.any(Object),
+            members: expect.any(Array),
+            currentUserStatus: null  // 未登录用户
+          })
+        }
+      });
+
+      // 确保appliers字段不存在
+      expect(response.body.data.circle.appliers).toBeUndefined();
     });
 
     test('should not allow access to private circles via public API', async () => {
+      // 创建新的用户和私密朋友圈
+      const owner = await createTestUser();
       const privateCircle = await createTestCircle({
         name: '私密朋友圈',
         isPublic: false
-      }, testUser);
+      }, owner);
 
       // 尝试通过公开API访问私密朋友圈
       const response = await request(app)
