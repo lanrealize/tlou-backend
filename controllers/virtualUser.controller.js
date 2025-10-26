@@ -1,5 +1,6 @@
 const User = require('../models/User');
 const { AppError } = require('../utils/errorHandler');
+const { cleanupUserData } = require('../utils/memberCleanup');
 const { v4: uuidv4 } = require('uuid');
 
 // 生成虚拟openid
@@ -157,13 +158,24 @@ async function deleteVirtualUser(req, res) {
       });
     }
 
+    console.log(`开始删除虚拟用户: ${virtualUser.username} (${userOpenid})`);
+
+    // 使用通用清理函数清理所有相关数据
+    const summary = await cleanupUserData(userOpenid, {
+      deleteQiniuImages: true,
+      deleteVirtualUsers: false  // 虚拟用户不需要删除子虚拟用户
+    });
+
+    // 删除虚拟用户本身
     await User.findByIdAndDelete(userOpenid);
     
     console.log(`${req.user.isVirtual ? '虚拟用户' : '管理员'} ${req.user.username} 删除虚拟用户: ${virtualUser.username} (有效管理员: ${effectiveAdmin.username})`);
+    console.log(`虚拟用户 ${virtualUser.username} 删除完成，清理统计:`, summary);
     
     res.json({
       success: true,
-      message: '虚拟用户删除成功'
+      message: '虚拟用户删除成功，所有相关数据已清除',
+      data: { summary }
     });
   } catch (error) {
     console.error('删除虚拟用户失败:', error);

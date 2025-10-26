@@ -1,4 +1,6 @@
 const User = require('../../models/User');
+const Circle = require('../../models/Circle');
+const Post = require('../../models/Post');
 const { 
   createVirtualUser, 
   getVirtualUsers, 
@@ -298,14 +300,126 @@ describe('Virtual User Controller', () => {
 
       await deleteVirtualUser(req, res);
 
-      expect(res.json).toHaveBeenCalledWith({
-        success: true,
-        message: '虚拟用户删除成功'
-      });
+      expect(res.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          success: true,
+          message: '虚拟用户删除成功，所有相关数据已清除',
+          data: expect.objectContaining({
+            summary: expect.any(Object)
+          })
+        })
+      );
 
       // 验证用户已被删除
       const deletedUser = await User.findById(virtualUser._id);
       expect(deletedUser).toBeNull();
+    });
+
+    test('should delete virtual user and cleanup all related data', async () => {
+      // 创建虚拟用户创建的圈子
+      const createdCircle = await Circle.create({
+        name: '虚拟用户的圈子',
+        creator: virtualUser._id,
+        members: [adminUser._id],
+        isPublic: false
+      });
+
+      // 创建其他用户的圈子，虚拟用户作为成员
+      const otherCircle = await Circle.create({
+        name: '其他用户的圈子',
+        creator: adminUser._id,
+        members: [virtualUser._id],
+        isPublic: false
+      });
+
+      // 在虚拟用户创建的圈子中创建帖子
+      const postInCreatedCircle = await Post.create({
+        author: adminUser._id,
+        circle: createdCircle._id,
+        content: '管理员在虚拟用户圈子的帖子',
+        images: []
+      });
+
+      // 在其他圈子中创建虚拟用户的帖子
+      const postByVirtualUser = await Post.create({
+        author: virtualUser._id,
+        circle: otherCircle._id,
+        content: '虚拟用户的帖子',
+        images: []
+      });
+
+      // 先创建其他人的帖子
+      const otherPost = await Post.create({
+        author: adminUser._id,
+        circle: otherCircle._id,
+        content: '管理员的帖子',
+        likes: [virtualUser._id],
+        images: []
+      });
+      
+      // 使用updateOne添加评论，避免ObjectId问题
+      await Post.updateOne(
+        { _id: otherPost._id },
+        {
+          $push: {
+            comments: {
+              author: virtualUser._id,
+              content: '虚拟用户的评论'
+            }
+          }
+        }
+      );
+
+      const req = {
+        user: adminUser,
+        params: { userOpenid: virtualUser._id }
+      };
+
+      const res = { 
+        status: jest.fn().mockReturnThis(),
+        json: jest.fn() 
+      };
+
+      await deleteVirtualUser(req, res);
+
+      // 验证响应
+      expect(res.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          success: true,
+          message: '虚拟用户删除成功，所有相关数据已清除',
+          data: expect.objectContaining({
+            summary: expect.objectContaining({
+              deletedCircles: 1,
+              leftCircles: 1
+            })
+          })
+        })
+      );
+
+      // 验证虚拟用户已被删除
+      const deletedUser = await User.findById(virtualUser._id);
+      expect(deletedUser).toBeNull();
+
+      // 验证虚拟用户创建的圈子已被删除
+      const deletedCircle = await Circle.findById(createdCircle._id);
+      expect(deletedCircle).toBeNull();
+
+      // 验证虚拟用户创建的圈子中的帖子已被删除
+      const deletedPost = await Post.findById(postInCreatedCircle._id);
+      expect(deletedPost).toBeNull();
+
+      // 验证虚拟用户的帖子已被删除
+      const deletedVirtualUserPost = await Post.findById(postByVirtualUser._id);
+      expect(deletedVirtualUserPost).toBeNull();
+
+      // 验证虚拟用户从其他圈子成员列表中被移除
+      const remainingCircle = await Circle.findById(otherCircle._id);
+      expect(remainingCircle.members).not.toContain(virtualUser._id);
+
+      // 验证虚拟用户的点赞和评论被清理
+      const remainingPost = await Post.findById(otherPost._id);
+      expect(remainingPost.likes).not.toContain(virtualUser._id);
+      expect(remainingPost.comments.some(c => c.author === virtualUser._id)).toBe(false);
     });
 
     test('should return 404 for non-existent virtual user', async () => {
@@ -313,7 +427,7 @@ describe('Virtual User Controller', () => {
       
       const req = {
         user: adminUser,
-        params: { userId: fakeId }
+        params: { userOpenid: fakeId }  // 修正参数名
       };
 
       const res = {

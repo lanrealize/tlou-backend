@@ -174,9 +174,109 @@ async function getUserActivityStats(userId, circleId) {
   }
 }
 
+/**
+ * 完整清理用户的所有数据
+ * 包括：创建的圈子、参与的圈子、帖子、评论、点赞等
+ * 
+ * @param {String} userId - 用户openid
+ * @param {Object} options - 可选配置
+ * @param {Boolean} options.deleteQiniuImages - 是否删除七牛云图片（默认 true）
+ * @param {Boolean} options.deleteVirtualUsers - 是否删除创建的虚拟用户（默认 false）
+ * @returns {Object} 清理统计信息
+ */
+async function cleanupUserData(userId, options = {}) {
+  const { deleteQiniuImages = true, deleteVirtualUsers = false } = options;
+  
+  const stats = {
+    deletedCircles: 0,
+    leftCircles: 0,
+    deletedPosts: 0,
+    deletedComments: 0,
+    removedLikes: 0,
+    deletedVirtualUsers: 0
+  };
+
+  try {
+    // 1. 获取用户创建的所有圈子
+    const createdCircles = await Circle.find({ creator: userId });
+    stats.deletedCircles = createdCircles.length;
+
+    // 2. 获取用户所在的所有圈子（包括作为成员或申请者）
+    const memberCircles = await Circle.find({
+      $or: [
+        { members: userId },
+        { appliers: userId }
+      ]
+    });
+    stats.leftCircles = memberCircles.length;
+
+    // 3. 删除用户创建的所有圈子（及其所有帖子和图片）
+    if (createdCircles.length > 0) {
+      const createdCircleIds = createdCircles.map(c => c._id);
+      
+      // 使用辅助函数删除帖子并清理七牛云图片
+      const deletedCount = await deletePostsWithImages(
+        { circle: { $in: createdCircleIds } },
+        deleteQiniuImages
+      );
+      stats.deletedPosts += deletedCount;
+      
+      // 删除圈子
+      await Circle.deleteMany({ _id: { $in: createdCircleIds } });
+      console.log(`删除了用户创建的 ${createdCircles.length} 个圈子及其 ${deletedCount} 个帖子`);
+    }
+
+    // 4. 对于用户是成员/申请者的圈子，调用 cleanupUserInCircle 清理
+    for (const circle of memberCircles) {
+      // 使用 deleteQiniuImages 配置
+      const cleanupStats = await cleanupUserInCircle(userId, circle._id, { 
+        deleteQiniuImages 
+      });
+      
+      stats.deletedPosts += cleanupStats.deletedPosts;
+      stats.deletedComments += cleanupStats.deletedComments;
+      stats.removedLikes += cleanupStats.deletedLikes;
+      
+      // 从圈子的成员列表和申请列表中移除用户
+      await Circle.findByIdAndUpdate(circle._id, {
+        $pull: { 
+          members: userId,
+          appliers: userId
+        }
+      });
+      
+      // 更新成员统计
+      const updatedCircle = await Circle.findById(circle._id);
+      if (updatedCircle) {
+        updatedCircle.updateMemberStats();
+        await updatedCircle.save();
+      }
+    }
+
+    console.log(`从 ${memberCircles.length} 个圈子中清理了用户数据`);
+
+    // 5. 如果需要，删除用户创建的虚拟用户
+    if (deleteVirtualUsers) {
+      const User = require('../models/User');
+      const deletedVirtualUsers = await User.deleteMany({ 
+        virtualOwner: userId,
+        isVirtual: true 
+      });
+      stats.deletedVirtualUsers = deletedVirtualUsers.deletedCount;
+      console.log(`删除了用户创建的 ${deletedVirtualUsers.deletedCount} 个虚拟用户`);
+    }
+
+    return stats;
+  } catch (error) {
+    console.error('清理用户数据时出错:', error);
+    throw error;
+  }
+}
+
 module.exports = {
   cleanupUserInCircle,
   getUserActivityStats,
-  deletePostsWithImages
+  deletePostsWithImages,
+  cleanupUserData
 };
 
