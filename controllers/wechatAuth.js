@@ -2,7 +2,7 @@ const axios = require("axios");
 const User = require("../models/User");
 const Circle = require("../models/Circle");
 const Post = require("../models/Post");
-const { cleanupUserInCircle, deletePostsWithImages } = require("../utils/memberCleanup");
+const { cleanupUserInCircle, deletePostsWithImages, cleanupUserData } = require("../utils/memberCleanup");
 const { AppError } = require("../utils/errorHandler");
 
 // 1. 接收code，返回openid
