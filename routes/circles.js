@@ -359,12 +359,12 @@ router.get('/:id/appliers', checkOpenid, requirePermission('circle', 'creator'),
 /**
  * GET /api/circles/:id/invite-code
  * 
- * 功能：获取私有朋友圈的邀请码
+ * 功能：获取朋友圈的邀请码
  * 权限：仅朋友圈创建者
  * 
  * 返回数据：
  * - inviteCode: 6位邀请码
- * - inviteUrl: 完整的邀请链接
+ * - isPublic: 是否公开朋友圈
  */
 router.get('/:id/invite-code', checkOpenid, requirePermission('circle', 'creator'), catchAsync(async (req, res) => {
   const circle = await Circle.findById(req.params.id);
@@ -375,16 +375,11 @@ router.get('/:id/invite-code', checkOpenid, requirePermission('circle', 'creator
     await circle.save();
   }
 
-  const baseUrl = `${req.protocol}://${req.get('host')}`;
-  const inviteUrl = `${baseUrl}/api/public/circles/${req.params.id}?inviteCode=${circle.inviteCode}`;
-
   res.json({
     success: true,
     data: {
       inviteCode: circle.inviteCode,
-      inviteUrl: inviteUrl,
-      description: '分享此链接邀请朋友查看朋友圈',
-      note: circle.isPublic ? '公开朋友圈无需邀请码也可访问' : '私有朋友圈需要邀请码才能访问'
+      isPublic: circle.isPublic
     }
   });
 }));
