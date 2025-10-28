@@ -369,10 +369,6 @@ router.get('/:id/appliers', checkOpenid, requirePermission('circle', 'creator'),
 router.get('/:id/invite-code', checkOpenid, requirePermission('circle', 'creator'), catchAsync(async (req, res) => {
   const circle = await Circle.findById(req.params.id);
   
-  if (circle.isPublic) {
-    throw new AppError('公开朋友圈无需邀请码', 400);
-  }
-
   // 确保邀请码已生成（通常在创建时自动生成）
   if (!circle.inviteCode) {
     circle.inviteCode = circle.generateInviteCode();
@@ -380,14 +376,15 @@ router.get('/:id/invite-code', checkOpenid, requirePermission('circle', 'creator
   }
 
   const baseUrl = `${req.protocol}://${req.get('host')}`;
-  const inviteUrl = `${baseUrl}/api/public/circles/${req.params.id}?invite=${circle.inviteCode}`;
+  const inviteUrl = `${baseUrl}/api/public/circles/${req.params.id}?inviteCode=${circle.inviteCode}`;
 
   res.json({
     success: true,
     data: {
       inviteCode: circle.inviteCode,
       inviteUrl: inviteUrl,
-      description: '分享此链接邀请朋友查看朋友圈'
+      description: '分享此链接邀请朋友查看朋友圈',
+      note: circle.isPublic ? '公开朋友圈无需邀请码也可访问' : '私有朋友圈需要邀请码才能访问'
     }
   });
 }));

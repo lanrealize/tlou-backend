@@ -66,13 +66,13 @@ function requirePermission(resourceType, permission, options = {}) {
 
           case 'access':
             // 可以访问（公开 或 有任何角色 或 有效邀请码）
-            const { invite } = req.query;
+            const { inviteCode } = req.query;
             hasPermission = circle.isPublic || 
                            circle.hasAnyRole(userId) || 
-                           circle.isValidInviteCode(invite);
+                           circle.isValidInviteCode(inviteCode);
             if (!hasPermission) {
               // 根据context返回不同的错误消息
-              if (invite) {
+              if (inviteCode) {
                 return next(new AppError('邀请码无效或已过期', 403));
               }
               const errorMsg = req.query.circleId ? '无权查看此朋友圈的帖子' : '私密朋友圈，无权访问';
@@ -129,10 +129,10 @@ function requirePermission(resourceType, permission, options = {}) {
             if (!post.circle) {
               return next(new AppError('帖子所属朋友圈不存在', 404));
             }
-            const postInvite = req.query.invite;
+            const postInviteCode = req.query.inviteCode;
             hasPermission = post.circle.isPublic || 
                            post.circle.hasAnyRole(userId) || 
-                           post.circle.isValidInviteCode(postInvite);
+                           post.circle.isValidInviteCode(postInviteCode);
             if (!hasPermission) {
               return next(new AppError('无权访问此帖子', 403));
             }

@@ -1157,7 +1157,7 @@ describe('Circles Routes Test', () => {
         .expect(403);
 
       expect(response.body.status).toBe('fail');
-      expect(response.body.message).toBe('无权访问私密朋友圈');
+      expect(response.body.message).toBe('此为私密朋友圈，需要邀请码才能访问');
     });
 
     test('should return 404 for non-existent circles', async () => {
