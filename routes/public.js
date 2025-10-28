@@ -32,33 +32,44 @@ const router = express.Router();
  */
 router.get('/circles/random', randomCircleController.getRandomPublicCircle);
 
-// ========== 获取公开朋友圈详情 ==========
+// ========== 获取朋友圈详情 ==========
 /**
- * GET /api/public/circles/:id
+ * GET /api/public/circles/:id?invite=ABC123
  * 
- * 功能：获取公开朋友圈的基本信息
+ * 功能：获取朋友圈的基本信息
  * 认证：无需认证
- * 限制：只能访问 isPublic: true 的朋友圈
+ * 
+ * 访问规则：
+ * - 公开朋友圈：无需额外参数，直接访问
+ * - 私有朋友圈：需要正确的 invite 邀请码
+ * 
+ * 查询参数：
+ * - invite（可选）：6位邀请码，用于访问私有朋友圈
  * 
  * 返回数据：朋友圈基本信息（不包含敏感数据如申请者列表）
  */
 router.get('/circles/:id', catchAsync(async (req, res) => {
   const { id } = req.params;
+  const { invite } = req.query;
 
-  // 查询朋友圈
+  // 查询朋友圈（不使用lean，因为需要调用实例方法）
   const circle = await Circle.findById(id)
     .populate('creator', 'username avatar')
-    .populate('members', 'username avatar')
-    .lean();
+    .populate('members', 'username avatar');
 
   // 检查朋友圈是否存在
   if (!circle) {
     throw new AppError('朋友圈不存在', 404);
   }
 
-  // 只允许访问公开朋友圈
-  if (!circle.isPublic) {
-    throw new AppError('无权访问私密朋友圈', 403);
+  // 优雅的权限检查：公开朋友圈 或 有效邀请码
+  const canAccess = circle.isPublic || circle.isValidInviteCode(invite);
+  
+  if (!canAccess) {
+    const errorMsg = invite 
+      ? '邀请码无效，请检查邀请链接是否正确'
+      : '此为私密朋友圈，需要邀请码才能访问';
+    throw new AppError(errorMsg, 403);
   }
 
   // 返回基础信息（不包含敏感数据）
@@ -73,7 +84,8 @@ router.get('/circles/:id', catchAsync(async (req, res) => {
     stats: circle.stats,
     createdAt: circle.createdAt,
     latestActivityTime: circle.latestActivityTime,
-    currentUserStatus: null  // 未登录用户
+    currentUserStatus: null,  // 未登录用户
+    accessMethod: circle.isPublic ? 'public' : 'invite'  // 标记访问方式
   };
 
   res.json({
@@ -82,18 +94,22 @@ router.get('/circles/:id', catchAsync(async (req, res) => {
   });
 }));
 
-// ========== 获取公开朋友圈的帖子列表 ==========
+// ========== 获取朋友圈的帖子列表 ==========
 /**
- * GET /api/public/posts?circleId=xxx&page=1&limit=10
+ * GET /api/public/posts?circleId=xxx&page=1&limit=10&invite=ABC123
  * 
- * 功能：获取公开朋友圈的帖子列表
+ * 功能：获取朋友圈的帖子列表
  * 认证：无需认证
- * 限制：只能访问公开朋友圈的帖子
+ * 
+ * 访问规则：
+ * - 公开朋友圈：无需额外参数，直接访问
+ * - 私有朋友圈：需要正确的 invite 邀请码
  * 
  * 查询参数：
  * - circleId: 朋友圈ID（必填）
  * - page: 页码，默认1
  * - limit: 每页数量，默认10，最大50
+ * - invite（可选）：6位邀请码，用于访问私有朋友圈帖子
  * 
  * 返回数据：帖子列表，包含作者、点赞、评论等信息
  */
@@ -109,19 +125,25 @@ router.get('/posts', [
     throw new AppError('输入验证失败: ' + errors.array().map(e => e.msg).join(', '), 400);
   }
 
-  const { circleId, page = 1, limit = 10 } = req.query;
+  const { circleId, page = 1, limit = 10, invite } = req.query;
   const pageNum = parseInt(page);
   const limitNum = Math.min(parseInt(limit), 50); // 最大50条
 
-  // 检查朋友圈是否存在且是公开的
+  // 检查朋友圈是否存在
   const circle = await Circle.findById(circleId);
   
   if (!circle) {
     throw new AppError('朋友圈不存在', 404);
   }
 
-  if (!circle.isPublic) {
-    throw new AppError('无权访问私密朋友圈的帖子', 403);
+  // 优雅的权限检查：公开朋友圈 或 有效邀请码
+  const canAccess = circle.isPublic || circle.isValidInviteCode(invite);
+  
+  if (!canAccess) {
+    const errorMsg = invite 
+      ? '邀请码无效，无法查看此朋友圈的帖子'
+      : '此为私密朋友圈，需要邀请码才能查看帖子';
+    throw new AppError(errorMsg, 403);
   }
 
   // 查询帖子总数

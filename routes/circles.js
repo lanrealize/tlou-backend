@@ -355,6 +355,43 @@ router.get('/:id/appliers', checkOpenid, requirePermission('circle', 'creator'),
   });
 }));
 
+// ========== 获取邀请码 ==========
+/**
+ * GET /api/circles/:id/invite-code
+ * 
+ * 功能：获取私有朋友圈的邀请码
+ * 权限：仅朋友圈创建者
+ * 
+ * 返回数据：
+ * - inviteCode: 6位邀请码
+ * - inviteUrl: 完整的邀请链接
+ */
+router.get('/:id/invite-code', checkOpenid, requirePermission('circle', 'creator'), catchAsync(async (req, res) => {
+  const circle = await Circle.findById(req.params.id);
+  
+  if (circle.isPublic) {
+    throw new AppError('公开朋友圈无需邀请码', 400);
+  }
+
+  // 确保邀请码已生成（通常在创建时自动生成）
+  if (!circle.inviteCode) {
+    circle.inviteCode = circle.generateInviteCode();
+    await circle.save();
+  }
+
+  const baseUrl = `${req.protocol}://${req.get('host')}`;
+  const inviteUrl = `${baseUrl}/api/public/circles/${req.params.id}?invite=${circle.inviteCode}`;
+
+  res.json({
+    success: true,
+    data: {
+      inviteCode: circle.inviteCode,
+      inviteUrl: inviteUrl,
+      description: '分享此链接邀请朋友查看朋友圈'
+    }
+  });
+}));
+
 // 获取单个朋友圈详情（支持公开朋友圈和邀请访问）
 // ✅ 通用动态路由/:id必须放在最后，避免拦截具体路由
 router.get('/:id', checkOpenid, requirePermission('circle', 'access'), catchAsync(async (req, res) => {

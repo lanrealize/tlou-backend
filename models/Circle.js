@@ -46,6 +46,12 @@ const circleSchema = new mongoose.Schema({
   latestActivityTime: {
     type: Date,
     default: Date.now
+  },
+  // 简单邀请码 - 支持未注册用户访问私有朋友圈
+  inviteCode: {
+    type: String,
+    default: null,  // 只有私有朋友圈才有邀请码
+    index: true     // 为查询优化添加索引
   }
 }, {
   timestamps: true
@@ -109,5 +115,31 @@ circleSchema.methods.updateActivityTime = function() {
   this.latestActivityTime = new Date();
   return this.save();
 };
+
+// 生成简单邀请码（基于圈子ID的确定性生成）
+circleSchema.methods.generateInviteCode = function() {
+  if (this.isPublic) {
+    return null; // 公开朋友圈不需要邀请码
+  }
+  
+  const crypto = require('crypto');
+  // 基于圈子ID生成6位邀请码，确保同一个圈子总是生成相同的邀请码
+  const hash = crypto.createHash('md5').update(this._id.toString()).digest('hex');
+  return hash.substring(0, 6).toUpperCase();
+};
+
+// 验证邀请码是否有效
+circleSchema.methods.isValidInviteCode = function(code) {
+  if (!code || this.isPublic) return false;
+  return code === this.inviteCode;
+};
+
+// 预处理中间件：为私有朋友圈自动生成邀请码
+circleSchema.pre('save', function(next) {
+  if (!this.isPublic && !this.inviteCode) {
+    this.inviteCode = this.generateInviteCode();
+  }
+  next();
+});
 
 module.exports = mongoose.model('Circle', circleSchema); 
