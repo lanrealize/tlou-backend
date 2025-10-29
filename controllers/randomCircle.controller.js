@@ -28,6 +28,91 @@ function cleanupExpiredHistory() {
 }
 
 /**
+ * 检查帖子是否有图片
+ * @param {Object} post - 帖子对象
+ * @returns {boolean} - 是否有图片
+ */
+function hasImages(post) {
+  if (!post || !post.images || !Array.isArray(post.images)) {
+    return false;
+  }
+  return post.images.length > 0;
+}
+
+/**
+ * 查找符合条件的随机朋友圈（有帖子且第一个帖子有图片）
+ * @param {Object} query - 查询条件
+ * @param {number} maxAttempts - 最大尝试次数
+ * @returns {Object|null} - { circle, latestPost } 或 null
+ */
+async function findValidRandomCircle(query, maxAttempts = 10) {
+  const totalCount = await Circle.countDocuments(query);
+  
+  if (totalCount === 0) {
+    return null;
+  }
+
+  const excludeIds = new Set();
+  
+  for (let attempt = 0; attempt < maxAttempts && excludeIds.size < totalCount; attempt++) {
+    // 构建当前查询（排除已检查过的不合格朋友圈）
+    const currentQuery = excludeIds.size > 0 
+      ? { ...query, _id: { ...query._id, $nin: [...(query._id?.$nin || []), ...Array.from(excludeIds)] } }
+      : query;
+    
+    const availableCount = await Circle.countDocuments(currentQuery);
+    
+    if (availableCount === 0) {
+      break; // 没有更多可尝试的朋友圈
+    }
+    
+    // 生成随机索引
+    const randomIndex = Math.floor(Math.random() * availableCount);
+    
+    // 查询随机朋友圈
+    const circle = await Circle.findOne(currentQuery)
+      .skip(randomIndex)
+      .populate('creator', 'username avatar')
+      .populate('members', 'username avatar')
+      .lean();
+    
+    if (!circle) {
+      continue;
+    }
+    
+    // 查询该朋友圈的最新帖子
+    const latestPost = await Post.findOne({ circle: circle._id })
+      .populate('author', 'username avatar')
+      .sort({ createdAt: -1 })
+      .lean();
+    
+    // 检查是否符合条件：有帖子且帖子有图片
+    if (latestPost && hasImages(latestPost)) {
+      console.log(`✅ 找到符合条件的朋友圈 (尝试 ${attempt + 1}/${maxAttempts}):`, {
+        circleId: circle._id,
+        circleName: circle.name,
+        hasPost: !!latestPost,
+        imageCount: latestPost.images.length
+      });
+      return { circle, latestPost };
+    }
+    
+    // 不符合条件，记录并继续尝试
+    console.log(`⚠️ 朋友圈不符合条件 (尝试 ${attempt + 1}/${maxAttempts}):`, {
+      circleId: circle._id,
+      circleName: circle.name,
+      hasPost: !!latestPost,
+      hasImages: latestPost ? hasImages(latestPost) : false
+    });
+    
+    excludeIds.add(circle._id.toString());
+  }
+  
+  console.log(`❌ 未找到符合条件的朋友圈 (已尝试 ${excludeIds.size} 个)`);
+  return null;
+}
+
+/**
  * 获取随机public朋友圈
  * GET /api/circles/random
  * 
@@ -37,15 +122,20 @@ function cleanupExpiredHistory() {
  * 
  * 返回数据包含:
  * - circle: 朋友圈基本信息
- * - latestPost: 该朋友圈的最新帖子（如果有的话）
+ * - latestPost: 该朋友圈的最新帖子（保证有图片）
  * - randomInfo: 随机选择相关统计信息
+ * 
+ * 推荐规则：
+ * 1. ✅ 只推荐有帖子的朋友圈
+ * 2. ✅ 只推荐第一个帖子有图片的朋友圈
+ * 3. 自动重试，确保返回符合条件的朋友圈
  * 
  * 性能优化特点：
  * 1. 使用索引优化的查询 { isPublic: true }
  * 2. 轻量级随机算法，避免大量数据加载
  * 3. 内存中维护访问历史，减少数据库查询
  * 4. 自动清理过期历史记录
- * 5. 🆕 一次请求同时获取朋友圈和最新帖子，减少网络往返
+ * 5. 智能重试机制，避免无限循环
  */
 async function getRandomPublicCircle(req, res) {
   try {
@@ -97,65 +187,48 @@ async function getRandomPublicCircle(req, res) {
       }
     }
 
-    // 首先查询符合条件的朋友圈总数
-    const totalCount = await Circle.countDocuments(query);
+    // 查找符合条件的随机朋友圈（有帖子且第一个帖子有图片）
+    let result = await findValidRandomCircle(query);
 
-    if (totalCount === 0) {
-      // 如果没有可用的朋友圈，检查是否是因为全部访问过了
+    // 如果没找到符合条件的朋友圈
+    if (!result) {
+      // 检查是否是因为全部访问过了
       if (shouldExcludeVisited && userId && userHistory) {
-        const totalPublicCount = await Circle.countDocuments({ isPublic: true });
+        // 重置历史记录，重新尝试
+        userVisitHistory.delete(userId);
+        console.log('♻️  所有符合条件的朋友圈已访问完毕，重置历史记录并重试');
         
-        if (totalPublicCount > 0) {
-          // 有public朋友圈但全部访问过了，重置历史记录并重新随机
-          userVisitHistory.delete(userId);
-          console.log('♻️  所有public朋友圈已访问完毕，重置历史记录');
+        result = await findValidRandomCircle({ isPublic: true });
+        
+        if (result) {
+          const { circle: randomCircle, latestPost } = result;
           
-          // 重新查询
-          const newRandomIndex = Math.floor(Math.random() * totalPublicCount);
-          const randomCircle = await Circle.findOne({ isPublic: true })
-            .skip(newRandomIndex)
-            .populate('creator', 'username avatar')
-            .lean();
+          // 初始化新的访问历史
+          userVisitHistory.set(userId, {
+            visitedIds: new Set([randomCircle._id.toString()]),
+            lastResetTime: new Date()
+          });
 
-          if (randomCircle) {
-            // 🆕 查询该朋友圈的最新帖子
-            let latestPost = null;
-            try {
-              latestPost = await Post.findOne({ circle: randomCircle._id })
-                .populate('author', 'username avatar')
-                .sort({ createdAt: -1 })
-                .lean();
-            } catch (error) {
-              console.warn('⚠️ 查询最新帖子失败:', error.message);
+          return res.json({
+            success: true,
+            message: '获取随机朋友圈成功（已重置访问历史）',
+            data: {
+              circle: {
+                ...randomCircle,
+                latestPost: latestPost
+              },
+              isHistoryReset: true,
+              totalAvailable: await Circle.countDocuments({ isPublic: true }),
+              visitedCount: 1
             }
-
-            // 初始化新的访问历史
-            userVisitHistory.set(userId, {
-              visitedIds: new Set([randomCircle._id.toString()]),
-              lastResetTime: new Date()
-            });
-
-            return res.json({
-              success: true,
-              message: '获取随机朋友圈成功（已重置访问历史）',
-              data: {
-                circle: {
-                  ...randomCircle,
-                  latestPost: latestPost  // 🆕 添加最新帖子
-                },
-                isHistoryReset: true,
-                totalAvailable: totalPublicCount,
-                visitedCount: 1
-              }
-            });
-          }
+          });
         }
       }
 
-      // ✅ 不抛错误，返回空结果
+      // 确实没有符合条件的朋友圈
       return res.json({
         success: true,
-        message: '暂无可用的公开朋友圈',
+        message: '暂无可用的公开朋友圈（所有朋友圈都没有图片帖子）',
         data: {
           circle: null,
           randomInfo: {
@@ -167,31 +240,7 @@ async function getRandomPublicCircle(req, res) {
       });
     }
 
-    // 生成随机索引
-    const randomIndex = Math.floor(Math.random() * totalCount);
-
-    // 查询随机朋友圈
-    const randomCircle = await Circle.findOne(query)
-      .skip(randomIndex)
-      .populate('creator', 'username avatar')
-      .populate('members', 'username avatar')
-      .lean();
-
-    if (!randomCircle) {
-      throw new AppError('获取随机朋友圈失败', 500);
-    }
-
-    // 🆕 查询该朋友圈的最新帖子
-    let latestPost = null;
-    try {
-      latestPost = await Post.findOne({ circle: randomCircle._id })
-        .populate('author', 'username avatar')
-        .sort({ createdAt: -1 })
-        .lean();
-    } catch (error) {
-      console.warn('⚠️ 查询最新帖子失败:', error.message);
-      // 不抛出错误，继续返回朋友圈信息，只是没有最新帖子
-    }
+    const { circle: randomCircle, latestPost } = result;
 
     // 更新用户访问历史
     if (shouldExcludeVisited && userId) {
@@ -207,8 +256,7 @@ async function getRandomPublicCircle(req, res) {
       
       console.log(`📝 用户 ${userId} 访问历史更新:`, {
         currentCircle: randomCircle._id.toString(),
-        totalVisited: userHistory.visitedIds.size,
-        totalAvailable: totalCount
+        totalVisited: userHistory.visitedIds.size
       });
     }
 
@@ -225,10 +273,10 @@ async function getRandomPublicCircle(req, res) {
         stats: randomCircle.stats,
         createdAt: randomCircle.createdAt,
         latestActivityTime: randomCircle.latestActivityTime,
-        latestPost: latestPost  // 🆕 添加最新帖子
+        latestPost: latestPost
       },
       randomInfo: {
-        totalAvailable: totalCount,
+        totalAvailable: await Circle.countDocuments(query),
         visitedCount: userHistory ? userHistory.visitedIds.size : 0,
         isHistoryReset: false
       }
@@ -237,9 +285,9 @@ async function getRandomPublicCircle(req, res) {
     console.log('✅ 随机朋友圈获取成功:', {
       circleId: randomCircle._id,
       circleName: randomCircle.name,
-      totalAvailable: totalCount,
       visitedCount: userHistory ? userHistory.visitedIds.size : 0,
-      hasLatestPost: !!latestPost
+      hasLatestPost: !!latestPost,
+      imageCount: latestPost.images.length
     });
 
     res.json({
