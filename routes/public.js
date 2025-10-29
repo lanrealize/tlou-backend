@@ -72,6 +72,20 @@ router.get('/circles/:id', catchAsync(async (req, res) => {
     throw new AppError(errorMsg, 403);
   }
 
+  // 构建未登录用户的状态信息
+  // 只要提供了 inviteCode 就视为邀请模式，不区分公开/私有
+  // 这样设计的好处：朋友圈主人切换公开/私有时，邀请链接仍然有效
+  const isInviteMode = !!inviteCode;
+  
+  const currentUserStatus = {
+    isMember: false,
+    isOwner: false,
+    hasApplied: false,
+    isInvited: isInviteMode,  // 通过邀请链接访问（公开或私有）
+    canView: true,  // 能访问到这里说明有查看权限
+    canPost: false  // 未登录用户不能发帖
+  };
+
   // 返回基础信息（不包含敏感数据）
   const responseData = {
     _id: circle._id,
@@ -81,10 +95,13 @@ router.get('/circles/:id', catchAsync(async (req, res) => {
     creator: circle.creator,
     members: circle.members,
     memberCount: circle.members ? circle.members.length : 0,
+    allowInvite: circle.allowInvite,
+    allowPost: circle.allowPost,
     stats: circle.stats,
     createdAt: circle.createdAt,
+    updatedAt: circle.updatedAt,
     latestActivityTime: circle.latestActivityTime,
-    currentUserStatus: null,  // 未登录用户
+    currentUserStatus: currentUserStatus,
     accessMethod: circle.isPublic ? 'public' : 'invite'  // 标记访问方式
   };
 
