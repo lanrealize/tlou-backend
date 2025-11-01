@@ -405,6 +405,9 @@ describe('随机Public朋友圈控制器测试', () => {
     });
 
     test('重试机制性能测试', async () => {
+      // 清理之前的帖子
+      await Post.deleteMany({});
+      
       // 创建一个符合条件的朋友圈和多个不符合条件的
       await createTestPost({
         images: ['https://example.com/valid.jpg']

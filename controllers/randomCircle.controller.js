@@ -71,6 +71,7 @@ async function findValidRandomCircle(query, maxAttempts = 10) {
     
     // 查询随机朋友圈
     const circle = await Circle.findOne(currentQuery)
+      .sort({ _id: 1 })  // 添加稳定排序，避免skip返回重复结果
       .skip(randomIndex)
       .populate('creator', 'username avatar')
       .populate('members', 'username avatar')
