@@ -23,6 +23,10 @@ const circleSchema = new mongoose.Schema({
     type: Boolean,
     default: true
   },
+  enableShareAnimation: {
+    type: Boolean,
+    default: true  // 默认启用分享动画
+  },
   description: {
     type: String,
     maxlength: 200,

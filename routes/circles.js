@@ -217,6 +217,10 @@ router.patch('/:id/settings', checkOpenid, requirePermission('circle', 'creator'
     .optional()
     .isBoolean()
     .withMessage('公开状态必须是布尔值'),
+  body('enableShareAnimation')
+    .optional()
+    .isBoolean()
+    .withMessage('分享动画开关必须是布尔值'),
   body('description')
     .optional()
     .isString()
@@ -239,7 +243,7 @@ router.patch('/:id/settings', checkOpenid, requirePermission('circle', 'creator'
   // req.circle 已由中间件提供，权限已检查
 
   const updateFields = {};
-  const allowedFields = ['name', 'isPublic', 'description', 'allowInvite', 'allowPost'];
+  const allowedFields = ['name', 'isPublic', 'enableShareAnimation', 'description', 'allowInvite', 'allowPost'];
   
   allowedFields.forEach(field => {
     if (req.body[field] !== undefined) {
