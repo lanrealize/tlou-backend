@@ -364,14 +364,22 @@ router.get('/:id/appliers', checkOpenid, requirePermission('circle', 'creator'),
  * GET /api/circles/:id/invite-code
  * 
  * 功能：获取朋友圈的邀请码
- * 权限：仅朋友圈创建者
+ * 权限：创建者 OR (成员 AND allowInvite=true)
  * 
  * 返回数据：
  * - inviteCode: 6位邀请码
  * - isPublic: 是否公开朋友圈
  */
-router.get('/:id/invite-code', checkOpenid, requirePermission('circle', 'creator'), catchAsync(async (req, res) => {
-  const circle = await Circle.findById(req.params.id);
+router.get('/:id/invite-code', checkOpenid, requirePermission('circle', 'member'), catchAsync(async (req, res) => {
+  const circle = req.circle; // 由中间件提供
+  
+  // 权限判断：创建者 OR (成员 AND allowInvite为true)
+  const isCreator = circle.isCreator(req.user._id);
+  const canGetInviteCode = isCreator || circle.allowInvite === true;
+  
+  if (!canGetInviteCode) {
+    throw new AppError('朋友圈主人未开启成员分享功能', 403);
+  }
   
   // 确保邀请码已生成（通常在创建时自动生成）
   if (!circle.inviteCode) {

@@ -1246,6 +1246,161 @@ describe('Circles Routes Test', () => {
     });
   });
 
+  // 测试获取邀请码接口
+  describe('GET /api/circles/:id/invite-code - Member Invite Permission', () => {
+    let circleOwner, circleMember, nonMember;
+    let testCircleWithInvite, testCircleWithoutInvite;
+
+    beforeEach(async () => {
+      // 创建三个测试用户
+      circleOwner = await createTestUser();
+      circleMember = await createTestUser();
+      nonMember = await createTestUser();
+
+      // 创建朋友圈：allowInvite=true
+      testCircleWithInvite = await createTestCircle({
+        name: '允许成员分享的朋友圈',
+        allowInvite: true
+      }, circleOwner);
+      await Circle.findByIdAndUpdate(testCircleWithInvite._id, {
+        $push: { members: circleMember._id }
+      });
+
+      // 创建朋友圈：allowInvite=false
+      testCircleWithoutInvite = await createTestCircle({
+        name: '不允许成员分享的朋友圈',
+        allowInvite: false
+      }, circleOwner);
+      await Circle.findByIdAndUpdate(testCircleWithoutInvite._id, {
+        $push: { members: circleMember._id }
+      });
+    });
+
+    test('should allow creator to get invite code', async () => {
+      const response = await request(app)
+        .get(`/api/circles/${testCircleWithInvite._id}/invite-code`)
+        .query({ openid: circleOwner._id })
+        .expect(200);
+
+      expect(response.body).toEqual({
+        success: true,
+        data: {
+          inviteCode: expect.any(String),
+          isPublic: expect.any(Boolean)
+        }
+      });
+      expect(response.body.data.inviteCode).toHaveLength(6);
+    });
+
+    test('should allow member to get invite code when allowInvite=true', async () => {
+      const response = await request(app)
+        .get(`/api/circles/${testCircleWithInvite._id}/invite-code`)
+        .query({ openid: circleMember._id })
+        .expect(200);
+
+      expect(response.body).toEqual({
+        success: true,
+        data: {
+          inviteCode: expect.any(String),
+          isPublic: expect.any(Boolean)
+        }
+      });
+      expect(response.body.data.inviteCode).toHaveLength(6);
+    });
+
+    test('should reject member when allowInvite=false', async () => {
+      const response = await request(app)
+        .get(`/api/circles/${testCircleWithoutInvite._id}/invite-code`)
+        .query({ openid: circleMember._id })
+        .expect(403);
+
+      expect(response.body).toEqual({
+        status: 'fail',
+        message: '朋友圈主人未开启成员分享功能'
+      });
+    });
+
+    test('should reject non-member from getting invite code', async () => {
+      const response = await request(app)
+        .get(`/api/circles/${testCircleWithInvite._id}/invite-code`)
+        .query({ openid: nonMember._id })
+        .expect(403);
+
+      expect(response.body).toEqual({
+        status: 'fail',
+        message: '您不是此朋友圈的成员'
+      });
+    });
+
+    test('should allow creator to get invite code even when allowInvite=false', async () => {
+      const response = await request(app)
+        .get(`/api/circles/${testCircleWithoutInvite._id}/invite-code`)
+        .query({ openid: circleOwner._id })
+        .expect(200);
+
+      expect(response.body.success).toBe(true);
+      expect(response.body.data.inviteCode).toBeDefined();
+    });
+
+    test('Bug修复测试: allowInvite从false改为true后成员应该能获取邀请码', async () => {
+      // 1. 创建朋友圈，allowInvite=false
+      const circle = await createTestCircle({
+        name: 'Bug测试朋友圈',
+        allowInvite: false
+      }, circleOwner);
+      await Circle.findByIdAndUpdate(circle._id, {
+        $push: { members: circleMember._id }
+      });
+
+      // 2. 成员尝试获取邀请码，应该失败
+      await request(app)
+        .get(`/api/circles/${circle._id}/invite-code`)
+        .query({ openid: circleMember._id })
+        .expect(403);
+
+      // 3. 圈主修改设置，allowInvite=true
+      await request(app)
+        .patch(`/api/circles/${circle._id}/settings`)
+        .send({
+          allowInvite: true,
+          openid: circleOwner._id
+        })
+        .expect(200);
+
+      // 4. 成员再次尝试获取邀请码，应该成功
+      const response = await request(app)
+        .get(`/api/circles/${circle._id}/invite-code`)
+        .query({ openid: circleMember._id })
+        .expect(200);
+
+      expect(response.body.success).toBe(true);
+      expect(response.body.data.inviteCode).toBeDefined();
+      expect(response.body.data.inviteCode).toHaveLength(6);
+    });
+
+    test('should return 404 when circle does not exist', async () => {
+      const fakeCircleId = '507f1f77bcf86cd799439011';
+      const response = await request(app)
+        .get(`/api/circles/${fakeCircleId}/invite-code`)
+        .query({ openid: circleOwner._id })
+        .expect(404);
+
+      expect(response.body.status).toBe('fail');
+    });
+
+    test('should return 400 when circle ID is invalid', async () => {
+      const response = await request(app)
+        .get('/api/circles/invalid-id/invite-code')
+        .query({ openid: circleOwner._id })
+        .expect(400);
+
+      expect(response.body).toEqual({
+        status: 'fail',
+        message: '无效的朋友圈ID'
+      });
+    });
+  });
+
   // 更新 /my 接口测试以适配新的用户状态管理
   describe('GET /api/circles/my - Updated for New User Role Management', () => {
     test('should return circles where user has any role (creator, member, applier)', async () => {
