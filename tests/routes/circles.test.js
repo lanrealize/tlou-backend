@@ -1134,7 +1134,14 @@ describe('Circles Routes Test', () => {
             isPublic: true,
             creator: expect.any(Object),
             members: expect.any(Array),
-            currentUserStatus: null  // 未登录用户
+            currentUserStatus: expect.objectContaining({
+              isMember: false,
+              isOwner: false,
+              hasApplied: false,
+              isInvited: false,
+              canView: true,
+              canPost: false
+            })
           })
         }
       });
@@ -1180,15 +1187,24 @@ describe('Circles Routes Test', () => {
 
     test('should allow guest users (without openid) to get random public circles', async () => {
       // 创建几个公开朋友圈
-      await createTestCircle({
+      const circle1 = await createTestCircle({
         name: '公开朋友圈1',
         isPublic: true
       }, testUser);
       
-      await createTestCircle({
+      const circle2 = await createTestCircle({
         name: '公开朋友圈2',
         isPublic: true
       }, testUser);
+
+      // 为朋友圈创建带图片的帖子（random API 要求帖子必须有图片）
+      await createTestPost({
+        images: ['https://example.com/image1.jpg']
+      }, testUser, circle1);
+      
+      await createTestPost({
+        images: ['https://example.com/image2.jpg']
+      }, testUser, circle2);
 
       // 不提供openid
       const response = await request(app)
@@ -1207,10 +1223,15 @@ describe('Circles Routes Test', () => {
 
     test('should allow logged-in users to get random public circles', async () => {
       // 创建一个公开朋友圈
-      await createTestCircle({
+      const circle = await createTestCircle({
         name: '公开朋友圈',
         isPublic: true
       }, testUser);
+
+      // 为朋友圈创建带图片的帖子（random API 要求帖子必须有图片）
+      await createTestPost({
+        images: ['https://example.com/image.jpg']
+      }, testUser, circle);
 
       // 提供openid
       const response = await request(app)
@@ -1233,7 +1254,7 @@ describe('Circles Routes Test', () => {
 
       expect(response.body).toEqual({
         success: true,
-        message: '暂无可用的公开朋友圈',
+        message: '暂无可用的公开朋友圈（所有朋友圈都没有图片帖子）',
         data: {
           circle: null,
           randomInfo: {

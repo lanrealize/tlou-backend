@@ -6,8 +6,12 @@ let mongoServer;
 // 在所有测试开始前设置
 beforeAll(async () => {
   try {
-    // 启动内存数据库
-    mongoServer = await MongoMemoryServer.create();
+    // 启动内存数据库（增加启动超时时间）
+    mongoServer = await MongoMemoryServer.create({
+      instance: {
+        launchTimeout: 30000 // 30秒启动超时
+      }
+    });
     const mongoUri = mongoServer.getUri();
     
     // 连接到测试数据库

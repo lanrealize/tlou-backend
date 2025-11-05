@@ -13,7 +13,7 @@ module.exports = {
   coverageDirectory: 'coverage',
   coverageReporters: ['text', 'lcov', 'html'],
   setupFilesAfterEnv: ['<rootDir>/tests/setup.js'],
-  testTimeout: 10000, // 减少到10秒
+  testTimeout: 30000, // 增加到30秒以应对MongoDB Memory Server启动
   maxWorkers: '50%', // 使用50%的CPU核心进行并行测试
   forceExit: true, // 强制退出
   detectOpenHandles: true, // 检测未关闭的句柄

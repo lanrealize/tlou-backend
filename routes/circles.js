@@ -73,9 +73,35 @@ router.get('/my', checkOpenid, catchAsync(async (req, res) => {
     }
   ]);
 
+  // 收集所有帖子作者的 ID
+  const authorIds = posts
+    .map(p => p.post.author)
+    .filter(authorId => authorId); // 过滤掉可能的 null/undefined
+
+  // 批量查询所有作者的用户信息
+  const users = await User.find(
+    { _id: { $in: authorIds } },
+    'username avatar'
+  );
+
+  // 创建用户信息映射表
+  const userMap = new Map(users.map(user => [user._id.toString(), user]));
+
+  // 填充帖子的作者信息
   const latestPostMap = {};
   for (const p of posts) {
-    latestPostMap[p._id.toString()] = p.post;
+    const post = p.post;
+    
+    // 将 author 从字符串替换为用户对象
+    if (post.author) {
+      post.author = userMap.get(post.author.toString()) || {
+        _id: post.author,
+        username: '未知用户',
+        avatar: ''
+      };
+    }
+    
+    latestPostMap[p._id.toString()] = post;
   }
 
   const result = circles.map(circle => ({
