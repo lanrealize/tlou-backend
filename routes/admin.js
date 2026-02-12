@@ -9,7 +9,9 @@ const {
   deleteVirtualUser,
   updateVirtualUser 
 } = require('../controllers/virtualUser.controller');
-const { catchAsync } = require('../utils/errorHandler');
+const { catchAsync, AppError } = require('../utils/errorHandler');
+const User = require('../models/User');
+const TempUser = require('../models/TempUser');
 
 // 所有管理员路由都需要先验证openid，再验证管理员权限
 router.use(checkOpenid);
@@ -53,5 +55,55 @@ router.delete('/virtual-users/:userOpenid', [
     .notEmpty()
     .withMessage('用户openid不能为空')
 ], catchAsync(deleteVirtualUser));
+
+// 重置用户配额
+router.post('/reset-quota/:openid', [
+  param('openid')
+    .notEmpty()
+    .withMessage('openid不能为空')
+], catchAsync(async (req, res) => {
+  const { openid } = req.params;
+  
+  // 先查找真实用户
+  let user = await User.findById(openid);
+  if (user) {
+    // 重置真实用户配额
+    user.discoverQuota.count = 0;
+    user.discoverQuota.lastDate = '';
+    await user.save();
+    
+    return res.json({
+      success: true,
+      message: '真实用户配额已重置',
+      data: {
+        openid,
+        userType: 'User',
+        quota: user.discoverQuota
+      }
+    });
+  }
+  
+  // 查找临时用户
+  let tempUser = await TempUser.findById(openid);
+  if (tempUser) {
+    // 重置临时用户配额
+    tempUser.discoverQuota.count = 0;
+    tempUser.discoverQuota.lastDate = '';
+    await tempUser.save();
+    
+    return res.json({
+      success: true,
+      message: '临时用户配额已重置',
+      data: {
+        openid,
+        userType: 'TempUser',
+        quota: tempUser.discoverQuota
+      }
+    });
+  }
+  
+  // 用户不存在
+  throw new AppError('用户不存在', 404);
+}));
 
 module.exports = router;
