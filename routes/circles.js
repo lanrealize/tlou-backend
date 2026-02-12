@@ -57,9 +57,27 @@ router.get('/my', checkOpenid, catchAsync(async (req, res) => {
   })
     .populate('creator', 'username avatar')
     .populate('members', 'username avatar')
-    .populate('appliers.userId', 'username avatar')
     .sort({ latestActivityTime: -1 })
     .lean();
+
+  // 手动 populate appliers
+  const allApplierIds = [];
+  circles.forEach(circle => {
+    if (circle.appliers && circle.appliers.length > 0) {
+      circle.appliers.forEach(applier => {
+        if (applier.userId) {
+          allApplierIds.push(applier.userId);
+        }
+      });
+    }
+  });
+
+  // 批量查询所有申请者的用户信息
+  const applierUsers = await User.find(
+    { _id: { $in: allApplierIds } },
+    'username avatar'
+  );
+  const applierUserMap = new Map(applierUsers.map(user => [user._id.toString(), user]));
 
   const circleIds = circles.map(c => c._id);
 
@@ -76,7 +94,7 @@ router.get('/my', checkOpenid, catchAsync(async (req, res) => {
   // 收集所有帖子作者的 ID
   const authorIds = posts
     .map(p => p.post.author)
-    .filter(authorId => authorId); // 过滤掉可能的 null/undefined
+    .filter(authorId => authorId);
 
   // 批量查询所有作者的用户信息
   const users = await User.find(
@@ -104,10 +122,33 @@ router.get('/my', checkOpenid, catchAsync(async (req, res) => {
     latestPostMap[p._id.toString()] = post;
   }
 
-  const result = circles.map(circle => ({
-    ...circle,
-    latestPost: latestPostMap[circle._id.toString()] || null
-  }));
+  const result = circles.map(circle => {
+    // 手动格式化 appliers 数据
+    const formattedAppliers = (circle.appliers || []).map(applier => {
+      const user = applierUserMap.get(applier.userId);
+      if (user) {
+        return {
+          _id: user._id,
+          username: user.username,
+          avatar: user.avatar,
+          appliedAt: applier.appliedAt
+        };
+      }
+      // 用户不存在的情况
+      return {
+        _id: applier.userId,
+        username: '未知用户',
+        avatar: '',
+        appliedAt: applier.appliedAt
+      };
+    });
+
+    return {
+      ...circle,
+      appliers: formattedAppliers,
+      latestPost: latestPostMap[circle._id.toString()] || null
+    };
+  });
 
   res.json({
     success: true,
