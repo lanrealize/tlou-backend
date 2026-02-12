@@ -2,6 +2,7 @@ const mongoose = require('mongoose');
 const Circle = require('../../models/Circle');
 const User = require('../../models/User');
 const Post = require('../../models/Post');
+const GuestQuota = require('../../models/GuestQuota');
 const { createTestUser, createTestCircle, createTestPost } = require('../helpers/testUtils');
 const randomCircleController = require('../../controllers/randomCircle.controller');
 
@@ -60,7 +61,10 @@ describe('随机Public朋友圈控制器测试', () => {
       user: testUser1,  // 保留以兼容旧测试
       query: {
         openid: testUser1._id  // 添加 openid 让 controller 能识别用户
-      }
+      },
+      headers: {},
+      connection: {},
+      socket: {}
     };
 
     mockRes = {
@@ -164,20 +168,18 @@ describe('随机Public朋友圈控制器测试', () => {
     test('未登录用户也应该能访问随机public朋友圈', async () => {
       mockReq.user = null; // 模拟未登录状态
       mockReq.query = {}; // 移除 openid，模拟未登录
+      mockReq.connection.remoteAddress = '192.168.1.200'; // 模拟IP地址
 
       await randomCircleController.getRandomPublicCircle(mockReq, mockRes);
 
-      expect(mockRes.json).toHaveBeenCalledWith(
-        expect.objectContaining({
-          success: true,
-          data: expect.objectContaining({
-            circle: expect.any(Object),
-            randomInfo: expect.objectContaining({
-              visitedCount: 0 // 未登录用户不会有访问历史统计
-            })
-          })
-        })
-      );
+      const call = mockRes.json.mock.calls[0];
+      const responseData = call[0];
+
+      expect(responseData.success).toBe(true);
+      expect(responseData.data.circle).toBeDefined();
+      expect(responseData.data.quota).toBeDefined();
+      expect(responseData.data.quota.isGuest).toBe(true);
+      expect(responseData.data.randomInfo.visitedCount).toBe(0); // 未登录用户不会有访问历史统计
     });
   });
 
@@ -237,12 +239,13 @@ describe('随机Public朋友圈控制器测试', () => {
 
       // publicCircle3 没有帖子
 
-      // 多次请求，验证不会返回 publicCircle3
-      const testRounds = 10;
+      // 多次请求，验证不会返回 publicCircle3（限制在配额内）
+      const testRounds = 3;
       const returnedCircleIds = new Set();
       
       for (let i = 0; i < testRounds; i++) {
         mockRes.json.mockClear();
+        mockRes.status.mockClear();
         mockReq.query.excludeVisited = 'false'; // 允许重复访问
         
         await randomCircleController.getRandomPublicCircle(mockReq, mockRes);
@@ -250,14 +253,13 @@ describe('随机Public朋友圈控制器测试', () => {
         const call = mockRes.json.mock.calls[0];
         const responseData = call[0];
 
-        if (responseData.data.circle) {
+        if (responseData.success && responseData.data.circle) {
           returnedCircleIds.add(responseData.data.circle._id.toString());
         }
       }
 
-      // 应该只返回 publicCircle1 和 publicCircle2
-      expect(returnedCircleIds.has(publicCircle1._id.toString())).toBe(true);
-      expect(returnedCircleIds.has(publicCircle2._id.toString())).toBe(true);
+      // 应该只返回 publicCircle1 和 publicCircle2，不会返回 publicCircle3
+      expect(returnedCircleIds.size).toBeGreaterThan(0);
       expect(returnedCircleIds.has(publicCircle3._id.toString())).toBe(false);
     });
 
@@ -485,11 +487,12 @@ describe('随机Public朋友圈控制器测试', () => {
       expect(responseData.data.quota.remaining).toBe(2);
     });
 
-    test('未登录用户不应该有配额限制', async () => {
+    test('未登录用户应该有配额限制（每天3次）', async () => {
       mockReq.query = {}; // 移除 openid
+      mockReq.connection.remoteAddress = '192.168.1.100'; // 模拟IP地址
 
-      // 多次请求都应该成功
-      for (let i = 0; i < 5; i++) {
+      // 前3次请求应该成功
+      for (let i = 0; i < 3; i++) {
         mockRes.json.mockClear();
         mockRes.status.mockClear();
         await randomCircleController.getRandomPublicCircle(mockReq, mockRes);
@@ -498,8 +501,26 @@ describe('随机Public朋友圈控制器测试', () => {
         const responseData = call[0];
 
         expect(responseData.success).toBe(true);
-        expect(responseData.data.quota).toBeNull();
+        expect(responseData.data.quota).toBeDefined();
+        expect(responseData.data.quota.isGuest).toBe(true);
+        expect(responseData.data.quota.daily).toBe(3);
+        expect(responseData.data.quota.used).toBe(i + 1);
+        expect(responseData.data.quota.remaining).toBe(2 - i);
       }
+
+      // 第4次请求应该失败
+      mockRes.json.mockClear();
+      mockRes.status.mockClear();
+      await randomCircleController.getRandomPublicCircle(mockReq, mockRes);
+
+      expect(mockRes.status).toHaveBeenCalledWith(429);
+      const call = mockRes.json.mock.calls[0];
+      const responseData = call[0];
+
+      expect(responseData.success).toBe(false);
+      expect(responseData.code).toBe('QUOTA_EXCEEDED');
+      expect(responseData.message).toContain('登录');
+      expect(responseData.data.quota.isGuest).toBe(true);
     });
 
     test('应该在接近配额时给出友好提示', async () => {
@@ -581,22 +602,33 @@ describe('随机Public朋友圈控制器测试', () => {
         images: ['https://example.com/3.jpg']
       }, testUser3, publicCircle3);
 
-      const requestCount = 10;
+      const requestCount = 3; // 限制在配额内
       const startTime = Date.now();
+      
+      let successCount = 0;
 
       for (let i = 0; i < requestCount; i++) {
+        mockRes.json.mockClear();
+        mockRes.status.mockClear();
         mockReq.query.excludeVisited = 'false';
         await randomCircleController.getRandomPublicCircle(mockReq, mockRes);
+        
+        if (mockRes.json.mock.calls.length > 0) {
+          const call = mockRes.json.mock.calls[0];
+          if (call[0].success) {
+            successCount++;
+          }
+        }
       }
 
       const endTime = Date.now();
       const totalTime = endTime - startTime;
       
-      // 平均每个请求应该在合理时间内完成（假设每个请求不超过200ms，因为增加了过滤逻辑）
+      // 平均每个请求应该在合理时间内完成
       expect(totalTime / requestCount).toBeLessThan(200);
       
       // 所有请求都应该成功
-      expect(mockRes.json).toHaveBeenCalledTimes(requestCount);
+      expect(successCount).toBe(requestCount);
       
       console.log(`🚀 性能测试: ${requestCount}个随机朋友圈请求耗时 ${totalTime}ms，平均 ${totalTime/requestCount}ms/请求`);
     });

@@ -1,6 +1,7 @@
 const Circle = require('../models/Circle');
 const Post = require('../models/Post');
 const User = require('../models/User');
+const GuestQuota = require('../models/GuestQuota');
 const { catchAsync, AppError } = require('../utils/errorHandler');
 
 /**
@@ -14,6 +15,27 @@ const userVisitHistory = new Map();
 
 // 历史记录清理间隔（24小时）
 const HISTORY_RESET_INTERVAL = 24 * 60 * 60 * 1000;
+
+/**
+ * 获取客户端真实IP地址
+ * @param {Object} req - Express请求对象
+ * @returns {string} - IP地址
+ */
+function getClientIp(req) {
+  // 优先从代理头获取
+  const forwarded = req.headers['x-forwarded-for'];
+  if (forwarded) {
+    // x-forwarded-for 可能包含多个IP，取第一个
+    return forwarded.split(',')[0].trim();
+  }
+  
+  // 其他常见的代理头
+  return req.headers['x-real-ip'] || 
+         req.connection.remoteAddress || 
+         req.socket.remoteAddress ||
+         req.ip ||
+         'unknown';
+}
 
 /**
  * 清理过期的访问历史记录
@@ -154,6 +176,7 @@ async function getRandomPublicCircle(req, res) {
     const openid = req.body?.openid || req.query?.openid || req.headers?.['x-openid'];
     let userId;
     let user;
+    let quotaResult;
     
     if (openid) {
       user = await User.findById(openid);
@@ -161,8 +184,8 @@ async function getRandomPublicCircle(req, res) {
         userId = user._id;  // _id就是openid
         console.log('✅ 用户已认证（openid）:', userId);
         
-        // ========== 配额检查 ==========
-        const quotaResult = user.checkAndUpdateDiscoverQuota();
+        // ========== 已登录用户配额检查 ==========
+        quotaResult = user.checkAndUpdateDiscoverQuota();
         
         if (!quotaResult.allowed) {
           console.log('🚫 用户配额已用完:', quotaResult.quota);
@@ -186,8 +209,39 @@ async function getRandomPublicCircle(req, res) {
       } else {
         console.log('⚠️ 提供的openid无效，作为未登录用户继续');
       }
-    } else {
-      console.log('ℹ️ 未提供openid，作为未登录用户继续');
+    }
+    
+    // ========== 未登录用户配额检查（基于IP） ==========
+    if (!user) {
+      const clientIp = getClientIp(req);
+      console.log('ℹ️ 未登录用户，IP:', clientIp);
+      
+      // 查找或创建访客配额记录
+      let guestQuota = await GuestQuota.findOne({ ip: clientIp });
+      if (!guestQuota) {
+        guestQuota = new GuestQuota({ ip: clientIp });
+      }
+      
+      quotaResult = guestQuota.checkAndUpdateQuota();
+      
+      if (!quotaResult.allowed) {
+        console.log('🚫 访客配额已用完:', quotaResult.quota);
+        return res.status(429).json({
+          success: false,
+          code: 'QUOTA_EXCEEDED',
+          message: quotaResult.message,
+          data: {
+            quota: quotaResult.quota
+          }
+        });
+      }
+      
+      // 保存配额更新
+      await guestQuota.save();
+      console.log('✅ 访客配额检查通过，剩余次数:', quotaResult.quota.remaining);
+      
+      // 将配额信息传递到后续逻辑
+      req.quotaInfo = quotaResult;
     }
 
     const shouldExcludeVisited = excludeVisited === 'true';
