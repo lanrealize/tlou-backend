@@ -205,9 +205,10 @@ describe('随机Public朋友圈控制器测试', () => {
       // publicCircle3 没有帖子
 
       // 多次请求，验证只返回 publicCircle1
-      const testRounds = 5;
+      const testRounds = 3; // 改为3次，避免超出配额
       for (let i = 0; i < testRounds; i++) {
         mockRes.json.mockClear();
+        mockRes.status.mockClear();
         await randomCircleController.getRandomPublicCircle(mockReq, mockRes);
 
         const call = mockRes.json.mock.calls[0];
@@ -275,10 +276,11 @@ describe('随机Public朋友圈控制器测试', () => {
 
       // publicCircle3: 没有帖子
 
-      // 多次请求
-      const testRounds = 8;
+      // 多次请求（限制在配额内）
+      const testRounds = 3;
       for (let i = 0; i < testRounds; i++) {
         mockRes.json.mockClear();
+        mockRes.status.mockClear();
         mockReq.query.excludeVisited = 'false';
         
         await randomCircleController.getRandomPublicCircle(mockReq, mockRes);
@@ -366,6 +368,201 @@ describe('随机Public朋友圈控制器测试', () => {
 
       expect(responseData.success).toBe(true);
       expect(responseData.data.circle.latestPost.images.length).toBe(2);
+    });
+  });
+
+  describe('配额限制测试', () => {
+    test('应该正确返回配额信息', async () => {
+      await randomCircleController.getRandomPublicCircle(mockReq, mockRes);
+
+      const call = mockRes.json.mock.calls[0];
+      const responseData = call[0];
+
+      expect(responseData.success).toBe(true);
+      expect(responseData.data.quota).toBeDefined();
+      expect(responseData.data.quota.daily).toBe(3);
+      expect(responseData.data.quota.used).toBe(1);
+      expect(responseData.data.quota.remaining).toBe(2);
+      expect(responseData.data.quota.resetAt).toBeDefined();
+      expect(responseData.data.quota.hasPurchase).toBe(false);
+    });
+
+    test('应该在第4次请求时返回配额超限错误', async () => {
+      // 前3次请求应该成功
+      for (let i = 0; i < 3; i++) {
+        mockRes.json.mockClear();
+        mockRes.status.mockClear();
+        await randomCircleController.getRandomPublicCircle(mockReq, mockRes);
+
+        const call = mockRes.json.mock.calls[0];
+        const responseData = call[0];
+
+        expect(responseData.success).toBe(true);
+        expect(responseData.data.quota.used).toBe(i + 1);
+        expect(responseData.data.quota.remaining).toBe(2 - i);
+      }
+
+      // 第4次请求应该失败
+      mockRes.json.mockClear();
+      mockRes.status.mockClear();
+      await randomCircleController.getRandomPublicCircle(mockReq, mockRes);
+
+      expect(mockRes.status).toHaveBeenCalledWith(429);
+      const call = mockRes.json.mock.calls[0];
+      const responseData = call[0];
+
+      expect(responseData.success).toBe(false);
+      expect(responseData.code).toBe('QUOTA_EXCEEDED');
+      expect(responseData.message).toContain('今日发现次数已用完');
+      expect(responseData.data.quota.used).toBe(3);
+      expect(responseData.data.quota.remaining).toBe(0);
+    });
+
+    test('购物用户应该有更多配额（8次）', async () => {
+      // 设置用户为购物用户
+      testUser1.discoverQuota.hasPurchase = true;
+      await testUser1.save();
+
+      // 前8次请求应该成功
+      for (let i = 0; i < 8; i++) {
+        mockRes.json.mockClear();
+        mockRes.status.mockClear();
+        await randomCircleController.getRandomPublicCircle(mockReq, mockRes);
+
+        const call = mockRes.json.mock.calls[0];
+        const responseData = call[0];
+
+        expect(responseData.success).toBe(true);
+        expect(responseData.data.quota.daily).toBe(8);
+        expect(responseData.data.quota.used).toBe(i + 1);
+        expect(responseData.data.quota.remaining).toBe(7 - i);
+        expect(responseData.data.quota.hasPurchase).toBe(true);
+      }
+
+      // 第9次请求应该失败
+      mockRes.json.mockClear();
+      mockRes.status.mockClear();
+      await randomCircleController.getRandomPublicCircle(mockReq, mockRes);
+
+      expect(mockRes.status).toHaveBeenCalledWith(429);
+      const call = mockRes.json.mock.calls[0];
+      const responseData = call[0];
+
+      expect(responseData.success).toBe(false);
+      expect(responseData.code).toBe('QUOTA_EXCEEDED');
+      expect(responseData.data.quota.used).toBe(8);
+      expect(responseData.data.quota.remaining).toBe(0);
+    });
+
+    test('配额应该在新的一天自动重置', async () => {
+      // 用完今天的配额
+      for (let i = 0; i < 3; i++) {
+        mockRes.json.mockClear();
+        await randomCircleController.getRandomPublicCircle(mockReq, mockRes);
+      }
+
+      // 验证配额已用完
+      mockRes.json.mockClear();
+      mockRes.status.mockClear();
+      await randomCircleController.getRandomPublicCircle(mockReq, mockRes);
+      expect(mockRes.status).toHaveBeenCalledWith(429);
+
+      // 模拟新的一天（修改用户的lastDate）
+      const user = await User.findById(testUser1._id);
+      user.discoverQuota.lastDate = '2026-02-11'; // 昨天的日期
+      await user.save();
+
+      // 新的一天应该可以再次请求
+      mockRes.json.mockClear();
+      mockRes.status.mockClear();
+      await randomCircleController.getRandomPublicCircle(mockReq, mockRes);
+
+      const call = mockRes.json.mock.calls[0];
+      const responseData = call[0];
+
+      expect(responseData.success).toBe(true);
+      expect(responseData.data.quota.used).toBe(1);
+      expect(responseData.data.quota.remaining).toBe(2);
+    });
+
+    test('未登录用户不应该有配额限制', async () => {
+      mockReq.query = {}; // 移除 openid
+
+      // 多次请求都应该成功
+      for (let i = 0; i < 5; i++) {
+        mockRes.json.mockClear();
+        mockRes.status.mockClear();
+        await randomCircleController.getRandomPublicCircle(mockReq, mockRes);
+
+        const call = mockRes.json.mock.calls[0];
+        const responseData = call[0];
+
+        expect(responseData.success).toBe(true);
+        expect(responseData.data.quota).toBeNull();
+      }
+    });
+
+    test('应该在接近配额时给出友好提示', async () => {
+      // 第1次请求
+      await randomCircleController.getRandomPublicCircle(mockReq, mockRes);
+      let call = mockRes.json.mock.calls[0];
+      let responseData = call[0];
+      expect(responseData.message).toBe('获取随机朋友圈成功');
+
+      // 第2次请求
+      mockRes.json.mockClear();
+      await randomCircleController.getRandomPublicCircle(mockReq, mockRes);
+      call = mockRes.json.mock.calls[0];
+      responseData = call[0];
+      expect(responseData.message).toContain('还剩最后 1 次机会');
+
+      // 第3次请求
+      mockRes.json.mockClear();
+      await randomCircleController.getRandomPublicCircle(mockReq, mockRes);
+      call = mockRes.json.mock.calls[0];
+      responseData = call[0];
+      expect(responseData.message).toContain('今日次数已用完');
+    });
+
+    test('配额超限时应该包含引导购物的提示', async () => {
+      // 用完配额
+      for (let i = 0; i < 3; i++) {
+        mockRes.json.mockClear();
+        await randomCircleController.getRandomPublicCircle(mockReq, mockRes);
+      }
+
+      // 第4次请求
+      mockRes.json.mockClear();
+      mockRes.status.mockClear();
+      await randomCircleController.getRandomPublicCircle(mockReq, mockRes);
+
+      const call = mockRes.json.mock.calls[0];
+      const responseData = call[0];
+
+      expect(responseData.message).toContain('购物用户');
+      expect(responseData.message).toContain('8');
+    });
+
+    test('自定义配额消息应该生效', async () => {
+      // 设置自定义消息
+      testUser1.discoverQuota.customMessage = '您的VIP配额已用完，请联系客服';
+      await testUser1.save();
+
+      // 用完配额
+      for (let i = 0; i < 3; i++) {
+        mockRes.json.mockClear();
+        await randomCircleController.getRandomPublicCircle(mockReq, mockRes);
+      }
+
+      // 第4次请求应该返回自定义消息
+      mockRes.json.mockClear();
+      mockRes.status.mockClear();
+      await randomCircleController.getRandomPublicCircle(mockReq, mockRes);
+
+      const call = mockRes.json.mock.calls[0];
+      const responseData = call[0];
+
+      expect(responseData.message).toBe('您的VIP配额已用完，请联系客服');
     });
   });
 

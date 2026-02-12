@@ -125,11 +125,13 @@ async function findValidRandomCircle(query, maxAttempts = 10) {
  * - circle: 朋友圈基本信息
  * - latestPost: 该朋友圈的最新帖子（保证有图片）
  * - randomInfo: 随机选择相关统计信息
+ * - quota: 配额信息（每日限额、已使用、剩余次数等）
  * 
  * 推荐规则：
  * 1. ✅ 只推荐有帖子的朋友圈
  * 2. ✅ 只推荐第一个帖子有图片的朋友圈
  * 3. 自动重试，确保返回符合条件的朋友圈
+ * 4. ✅ 每日配额限制（默认3次，购物用户8次）
  * 
  * 性能优化特点：
  * 1. 使用索引优化的查询 { isPublic: true }
@@ -137,6 +139,7 @@ async function findValidRandomCircle(query, maxAttempts = 10) {
  * 3. 内存中维护访问历史，减少数据库查询
  * 4. 自动清理过期历史记录
  * 5. 智能重试机制，避免无限循环
+ * 6. 配额检查与用户查询合并，零额外查询
  */
 async function getRandomPublicCircle(req, res) {
   try {
@@ -150,17 +153,42 @@ async function getRandomPublicCircle(req, res) {
     // 从请求中获取 openid（支持可选认证）
     const openid = req.body?.openid || req.query?.openid || req.headers?.['x-openid'];
     let userId;
-  if (openid) {
-    const user = await User.findById(openid);
-    if (user) {
-      userId = user._id;  // _id就是openid
-      console.log('✅ 用户已认证（openid）:', userId);
+    let user;
+    
+    if (openid) {
+      user = await User.findById(openid);
+      if (user) {
+        userId = user._id;  // _id就是openid
+        console.log('✅ 用户已认证（openid）:', userId);
+        
+        // ========== 配额检查 ==========
+        const quotaResult = user.checkAndUpdateDiscoverQuota();
+        
+        if (!quotaResult.allowed) {
+          console.log('🚫 用户配额已用完:', quotaResult.quota);
+          return res.status(429).json({
+            success: false,
+            code: 'QUOTA_EXCEEDED',
+            message: quotaResult.message,
+            data: {
+              quota: quotaResult.quota
+            }
+          });
+        }
+        
+        // 保存配额更新
+        await user.save();
+        console.log('✅ 配额检查通过，剩余次数:', quotaResult.quota.remaining);
+        
+        // 将配额信息传递到后续逻辑
+        req.quotaInfo = quotaResult;
+        
+      } else {
+        console.log('⚠️ 提供的openid无效，作为未登录用户继续');
+      }
     } else {
-      console.log('⚠️ 提供的openid无效，作为未登录用户继续');
+      console.log('ℹ️ 未提供openid，作为未登录用户继续');
     }
-  } else {
-    console.log('ℹ️ 未提供openid，作为未登录用户继续');
-  }
 
     const shouldExcludeVisited = excludeVisited === 'true';
     const shouldResetHistory = resetHistory === 'true';
@@ -212,7 +240,7 @@ async function getRandomPublicCircle(req, res) {
 
           return res.json({
             success: true,
-            message: '获取随机朋友圈成功（已重置访问历史）',
+            message: req.quotaInfo?.message || '获取随机朋友圈成功（已重置访问历史）',
             data: {
               circle: {
                 ...randomCircle,
@@ -220,7 +248,8 @@ async function getRandomPublicCircle(req, res) {
               },
               isHistoryReset: true,
               totalAvailable: await Circle.countDocuments({ isPublic: true }),
-              visitedCount: 1
+              visitedCount: 1,
+              quota: req.quotaInfo?.quota || null
             }
           });
         }
@@ -236,7 +265,8 @@ async function getRandomPublicCircle(req, res) {
             totalAvailable: 0,
             visitedCount: userHistory ? userHistory.visitedIds.size : 0,
             isHistoryReset: false
-          }
+          },
+          quota: req.quotaInfo?.quota || null
         }
       });
     }
@@ -280,7 +310,8 @@ async function getRandomPublicCircle(req, res) {
         totalAvailable: await Circle.countDocuments(query),
         visitedCount: userHistory ? userHistory.visitedIds.size : 0,
         isHistoryReset: false
-      }
+      },
+      quota: req.quotaInfo?.quota || null
     };
 
     console.log('✅ 随机朋友圈获取成功:', {
@@ -288,12 +319,13 @@ async function getRandomPublicCircle(req, res) {
       circleName: randomCircle.name,
       visitedCount: userHistory ? userHistory.visitedIds.size : 0,
       hasLatestPost: !!latestPost,
-      imageCount: latestPost.images.length
+      imageCount: latestPost.images.length,
+      quotaRemaining: req.quotaInfo?.quota?.remaining
     });
 
     res.json({
       success: true,
-      message: '获取随机朋友圈成功',
+      message: req.quotaInfo?.message || '获取随机朋友圈成功',
       data: responseData
     });
 
