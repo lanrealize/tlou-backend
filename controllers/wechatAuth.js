@@ -1,5 +1,6 @@
 const axios = require("axios");
 const User = require("../models/User");
+const TempUser = require("../models/TempUser");
 const Circle = require("../models/Circle");
 const Post = require("../models/Post");
 const { cleanupUserInCircle, deletePostsWithImages, cleanupUserData } = require("../utils/memberCleanup");
@@ -125,6 +126,12 @@ async function registerUser(req, res) {
       username,
       avatar
     });
+
+    // 删除临时用户记录（如果存在）
+    const deletedTempUser = await TempUser.findByIdAndDelete(openid);
+    if (deletedTempUser) {
+      console.log(`删除临时用户记录: ${openid}`);
+    }
 
     console.log(`创建用户成功: ${openid}`);
     

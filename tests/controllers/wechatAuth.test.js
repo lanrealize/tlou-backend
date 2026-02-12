@@ -1,6 +1,7 @@
 const { getOpenid, getUserInfo, registerUser } = require('../../controllers/wechatAuth');
 const { createTestUser, createMockRequest, createMockResponse } = require('../helpers/testUtils');
 const User = require('../../models/User');
+const TempUser = require('../../models/TempUser');
 const axios = require('axios');
 
 // Mock axios
@@ -204,6 +205,44 @@ describe('WeChat Auth Controller Test', () => {
       const createdUser = await User.findById('test_openid_123');
       expect(createdUser).toBeDefined();
       expect(createdUser.username).toBe('new_user');
+    });
+
+    test('should delete TempUser when registering', async () => {
+      // 先创建一个临时用户
+      const tempUser = await TempUser.create({
+        _id: 'test_openid_456',
+        discoverQuota: {
+          count: 2,
+          lastDate: '2026-02-12',
+          dailyLimit: 3
+        }
+      });
+
+      // 验证临时用户存在
+      let foundTempUser = await TempUser.findById('test_openid_456');
+      expect(foundTempUser).toBeDefined();
+
+      // 注册真实用户
+      const req = createMockRequest({
+        body: {
+          openid: 'test_openid_456',
+          username: 'new_user',
+          avatar: 'https://example.com/avatar.jpg'
+        }
+      });
+      const res = createMockResponse();
+
+      await registerUser(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(201);
+
+      // 验证真实用户被创建
+      const createdUser = await User.findById('test_openid_456');
+      expect(createdUser).toBeDefined();
+
+      // 验证临时用户被删除
+      foundTempUser = await TempUser.findById('test_openid_456');
+      expect(foundTempUser).toBeNull();
     });
 
     test('should return error when openid is missing', async () => {
