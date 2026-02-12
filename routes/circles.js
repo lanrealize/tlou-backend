@@ -57,27 +57,9 @@ router.get('/my', checkOpenid, catchAsync(async (req, res) => {
   })
     .populate('creator', 'username avatar')
     .populate('members', 'username avatar')
+    .populate('appliers.userId', 'username avatar')
     .sort({ latestActivityTime: -1 })
     .lean();
-
-  // 手动 populate appliers
-  const allApplierIds = [];
-  circles.forEach(circle => {
-    if (circle.appliers && circle.appliers.length > 0) {
-      circle.appliers.forEach(applier => {
-        if (applier.userId) {
-          allApplierIds.push(applier.userId);
-        }
-      });
-    }
-  });
-
-  // 批量查询所有申请者的用户信息
-  const applierUsers = await User.find(
-    { _id: { $in: allApplierIds } },
-    'username avatar'
-  );
-  const applierUserMap = new Map(applierUsers.map(user => [user._id.toString(), user]));
 
   const circleIds = circles.map(c => c._id);
 
@@ -123,25 +105,13 @@ router.get('/my', checkOpenid, catchAsync(async (req, res) => {
   }
 
   const result = circles.map(circle => {
-    // 手动格式化 appliers 数据
-    const formattedAppliers = (circle.appliers || []).map(applier => {
-      const user = applierUserMap.get(applier.userId);
-      if (user) {
-        return {
-          _id: user._id,
-          username: user.username,
-          avatar: user.avatar,
-          appliedAt: applier.appliedAt
-        };
-      }
-      // 用户不存在的情况
-      return {
-        _id: applier.userId,
-        username: '未知用户',
-        avatar: '',
-        appliedAt: applier.appliedAt
-      };
-    });
+    // 格式化 appliers 数据（与 /appliers 接口保持一致）
+    const formattedAppliers = (circle.appliers || []).map(applier => ({
+      _id: applier.userId._id,
+      username: applier.userId.username,
+      avatar: applier.userId.avatar,
+      appliedAt: applier.appliedAt
+    }));
 
     return {
       ...circle,
