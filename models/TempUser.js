@@ -26,7 +26,10 @@ const tempUserSchema = new mongoose.Schema({
 
 // 检查并更新发现朋友圈配额
 tempUserSchema.methods.checkAndUpdateDiscoverQuota = function() {
-  const today = new Date().toISOString().split('T')[0]; // 'YYYY-MM-DD'
+  // 使用中国时区（UTC+8）获取今天的日期
+  const now = new Date();
+  const chinaTime = new Date(now.getTime() + 8 * 60 * 60 * 1000);
+  const today = chinaTime.toISOString().split('T')[0]; // 'YYYY-MM-DD'
   
   // 如果不是今天，重置计数
   if (this.discoverQuota.lastDate !== today) {
@@ -77,11 +80,13 @@ tempUserSchema.methods.checkAndUpdateDiscoverQuota = function() {
   };
 };
 
-// 获取下一天 00:00 的时间戳
+// 获取下一天 00:00 的时间戳（中国时区）
 tempUserSchema.methods._getNextDayStart = function() {
-  const tomorrow = new Date();
-  tomorrow.setDate(tomorrow.getDate() + 1);
-  tomorrow.setHours(0, 0, 0, 0);
+  const now = new Date();
+  const chinaTime = new Date(now.getTime() + 8 * 60 * 60 * 1000);
+  const tomorrow = new Date(chinaTime);
+  tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
+  tomorrow.setUTCHours(0, 0, 0, 0);
   return tomorrow.toISOString();
 };
 
