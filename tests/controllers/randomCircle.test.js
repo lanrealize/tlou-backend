@@ -2,7 +2,7 @@ const mongoose = require('mongoose');
 const Circle = require('../../models/Circle');
 const User = require('../../models/User');
 const Post = require('../../models/Post');
-const GuestQuota = require('../../models/GuestQuota');
+const TempUser = require('../../models/TempUser');
 const { createTestUser, createTestCircle, createTestPost } = require('../helpers/testUtils');
 const randomCircleController = require('../../controllers/randomCircle.controller');
 
@@ -167,8 +167,9 @@ describe('随机Public朋友圈控制器测试', () => {
 
     test('未登录用户也应该能访问随机public朋友圈', async () => {
       mockReq.user = null; // 模拟未登录状态
-      mockReq.query = {}; // 移除 openid，模拟未登录
-      mockReq.connection.remoteAddress = '192.168.1.200'; // 模拟IP地址
+      mockReq.query = {
+        openid: 'temp_user_' + Date.now() // 使用临时 openid
+      };
 
       await randomCircleController.getRandomPublicCircle(mockReq, mockRes);
 
@@ -178,8 +179,22 @@ describe('随机Public朋友圈控制器测试', () => {
       expect(responseData.success).toBe(true);
       expect(responseData.data.circle).toBeDefined();
       expect(responseData.data.quota).toBeDefined();
-      expect(responseData.data.quota.isGuest).toBe(true);
+      expect(responseData.data.quota.isTemp).toBe(true);
       expect(responseData.data.randomInfo.visitedCount).toBe(0); // 未登录用户不会有访问历史统计
+    });
+
+    test('没有提供openid时应该返回错误', async () => {
+      mockReq.query = {}; // 不提供 openid
+
+      await randomCircleController.getRandomPublicCircle(mockReq, mockRes);
+
+      expect(mockRes.status).toHaveBeenCalledWith(400);
+      const call = mockRes.json.mock.calls[0];
+      const responseData = call[0];
+
+      expect(responseData.success).toBe(false);
+      expect(responseData.code).toBe('OPENID_REQUIRED');
+      expect(responseData.message).toContain('openid');
     });
   });
 
@@ -488,8 +503,8 @@ describe('随机Public朋友圈控制器测试', () => {
     });
 
     test('未登录用户应该有配额限制（每天3次）', async () => {
-      mockReq.query = {}; // 移除 openid
-      mockReq.connection.remoteAddress = '192.168.1.100'; // 模拟IP地址
+      const tempOpenid = 'temp_user_' + Date.now();
+      mockReq.query = { openid: tempOpenid };
 
       // 前3次请求应该成功
       for (let i = 0; i < 3; i++) {
@@ -502,7 +517,7 @@ describe('随机Public朋友圈控制器测试', () => {
 
         expect(responseData.success).toBe(true);
         expect(responseData.data.quota).toBeDefined();
-        expect(responseData.data.quota.isGuest).toBe(true);
+        expect(responseData.data.quota.isTemp).toBe(true);
         expect(responseData.data.quota.daily).toBe(3);
         expect(responseData.data.quota.used).toBe(i + 1);
         expect(responseData.data.quota.remaining).toBe(2 - i);
@@ -520,7 +535,7 @@ describe('随机Public朋友圈控制器测试', () => {
       expect(responseData.success).toBe(false);
       expect(responseData.code).toBe('QUOTA_EXCEEDED');
       expect(responseData.message).toContain('登录');
-      expect(responseData.data.quota.isGuest).toBe(true);
+      expect(responseData.data.quota.isTemp).toBe(true);
     });
 
     test('应该在接近配额时给出友好提示', async () => {
