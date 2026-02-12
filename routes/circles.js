@@ -52,12 +52,12 @@ router.get('/my', checkOpenid, catchAsync(async (req, res) => {
     $or: [
       { creator: req.user._id },
       { members: req.user._id },
-      { appliers: req.user._id }
+      { 'appliers.userId': req.user._id }
     ]
   })
     .populate('creator', 'username avatar')
     .populate('members', 'username avatar')
-    .populate('appliers', 'username avatar')
+    .populate('appliers.userId', 'username avatar')
     .sort({ latestActivityTime: -1 })
     .lean();
 
@@ -128,7 +128,7 @@ router.post('/:id/join', checkOpenid, catchAsync(async (req, res) => {
   }
 
   await Circle.findByIdAndUpdate(req.params.id, {
-    $pull: { appliers: req.user._id },
+    $pull: { appliers: { userId: req.user._id } },
     $push: { members: req.user._id }
   });
 
@@ -315,7 +315,12 @@ router.post('/:id/apply', checkOpenid, catchAsync(async (req, res) => {
   }
 
   await Circle.findByIdAndUpdate(req.params.id, {
-    $push: { appliers: req.user._id }
+    $push: { 
+      appliers: {
+        userId: req.user._id,
+        appliedAt: new Date()
+      }
+    }
   });
 
   res.json({
@@ -339,7 +344,7 @@ router.post('/:id/approve/:userOpenid', checkOpenid, requirePermission('circle',
   }
 
   await Circle.findByIdAndUpdate(req.params.id, {
-    $pull: { appliers: applicantId },
+    $pull: { appliers: { userId: applicantId } },
     $push: { members: applicantId }
   });
 
@@ -362,7 +367,7 @@ router.post('/:id/reject/:userOpenid', checkOpenid, requirePermission('circle', 
   }
 
   await Circle.findByIdAndUpdate(req.params.id, {
-    $pull: { appliers: applicantId }
+    $pull: { appliers: { userId: applicantId } }
   });
 
   res.json({
@@ -374,13 +379,20 @@ router.post('/:id/reject/:userOpenid', checkOpenid, requirePermission('circle', 
 // 获取申请者列表
 router.get('/:id/appliers', checkOpenid, requirePermission('circle', 'creator'), catchAsync(async (req, res) => {
   // req.circle 已由中间件提供，权限已检查
-  // 需要 populate appliers
-  const circle = await Circle.findById(req.params.id).populate('appliers', 'username avatar');
+  const circle = await Circle.findById(req.params.id).populate('appliers.userId', 'username avatar');
+
+  // 格式化返回数据，将 userId 展开为用户信息 + appliedAt
+  const formattedAppliers = circle.appliers.map(applier => ({
+    _id: applier.userId._id,
+    username: applier.userId.username,
+    avatar: applier.userId.avatar,
+    appliedAt: applier.appliedAt
+  }));
 
   res.json({
     success: true,
     data: {
-      appliers: circle.appliers
+      appliers: formattedAppliers
     }
   });
 }));

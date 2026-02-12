@@ -16,8 +16,15 @@ const circleSchema = new mongoose.Schema({
     ref: 'User'
   }],
   appliers: [{
-    type: String,  // openid数组
-    ref: 'User'
+    userId: {
+      type: String,
+      ref: 'User',
+      required: true
+    },
+    appliedAt: {
+      type: Date,
+      default: Date.now
+    }
   }],
   isPublic: {
     type: Boolean,
@@ -87,8 +94,13 @@ circleSchema.methods.isMember = function(userOpenid) {
 
 // 检查用户是否已申请加入
 circleSchema.methods.isApplier = function(userOpenid) {
-  // 处理populate情况
   return this.appliers.some(applier => {
+    // 新格式：{ userId, appliedAt }
+    if (applier.userId) {
+      const applierId = typeof applier.userId === 'object' ? applier.userId._id : applier.userId;
+      return applierId === userOpenid;
+    }
+    // 兼容旧格式：直接是字符串（数据迁移期间）
     const applierId = typeof applier === 'object' ? applier._id : applier;
     return applierId === userOpenid;
   });
