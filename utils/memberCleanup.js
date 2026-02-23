@@ -202,10 +202,11 @@ async function cleanupUserData(userId, options = {}) {
     stats.deletedCircles = createdCircles.length;
 
     // 2. 获取用户所在的所有圈子（包括作为成员或申请者）
+    // 注意：members 和 appliers 是字符串数组，需要使用 $in 或直接匹配
     const memberCircles = await Circle.find({
       $or: [
-        { members: userId },
-        { appliers: userId }
+        { members: { $in: [userId] } },
+        { appliers: { $in: [userId] } }
       ]
     });
     stats.leftCircles = memberCircles.length;

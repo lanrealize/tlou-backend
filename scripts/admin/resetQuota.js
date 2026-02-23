@@ -3,9 +3,6 @@ const mongoose = require('mongoose');
 const User = require('../../models/User');
 const TempUser = require('../../models/TempUser');
 
-// 要重置配额的 openid
-const TARGET_OPENID = 'o4Y5CvoRL1Oodi_q7jWWrsMyqMIo';
-
 // 连接数据库
 async function connectDB() {
   try {
@@ -22,51 +19,67 @@ async function connectDB() {
   }
 }
 
-// 重置配额
-async function resetQuota() {
-  console.log(`\n🔄 开始重置配额: ${TARGET_OPENID}\n`);
+// 重置所有用户的配额
+async function resetAllQuotas() {
+  console.log(`\n🔄 开始重置所有用户的配额\n`);
 
   try {
-    // 先查找真实用户
-    let user = await User.findById(TARGET_OPENID);
-    if (user) {
-      console.log('📊 重置前配额信息:');
-      console.log(`  - 类型: 真实用户`);
-      console.log(`  - 已使用: ${user.discoverQuota.count}/${user.discoverQuota.dailyLimit}`);
-      console.log(`  - 最后使用日期: ${user.discoverQuota.lastDate || '无'}`);
-      console.log(`  - 购物用户: ${user.discoverQuota.hasPurchase ? '是' : '否'}`);
+    // 重置所有真实用户
+    const users = await User.find({});
+    console.log(`📊 找到 ${users.length} 个真实用户\n`);
+
+    let userResetCount = 0;
+    for (const user of users) {
+      const hadQuota = user.discoverQuota.count > 0;
+      
+      if (hadQuota) {
+        console.log(`重置用户: ${user.username} (${user._id})`);
+        console.log(`  - 重置前: ${user.discoverQuota.count}/${user.discoverQuota.dailyLimit}`);
+      }
       
       // 重置配额
       user.discoverQuota.count = 0;
       user.discoverQuota.lastDate = '';
       await user.save();
       
-      console.log('\n✅ 真实用户配额已重置');
-      console.log(`  - 剩余次数: ${user.discoverQuota.dailyLimit}/${user.discoverQuota.dailyLimit}`);
-      return;
+      if (hadQuota) {
+        console.log(`  - 重置后: 0/${user.discoverQuota.dailyLimit}\n`);
+        userResetCount++;
+      }
     }
     
-    // 查找临时用户
-    let tempUser = await TempUser.findById(TARGET_OPENID);
-    if (tempUser) {
-      console.log('📊 重置前配额信息:');
-      console.log(`  - 类型: 临时用户`);
-      console.log(`  - 已使用: ${tempUser.discoverQuota.count}/${tempUser.discoverQuota.dailyLimit}`);
-      console.log(`  - 最后使用日期: ${tempUser.discoverQuota.lastDate || '无'}`);
+    console.log(`✅ 真实用户配额重置完成: ${userResetCount}/${users.length} 个用户有配额被重置\n`);
+    
+    // 重置所有临时用户
+    const tempUsers = await TempUser.find({});
+    console.log(`📊 找到 ${tempUsers.length} 个临时用户\n`);
+    
+    let tempUserResetCount = 0;
+    for (const tempUser of tempUsers) {
+      const hadQuota = tempUser.discoverQuota.count > 0;
+      
+      if (hadQuota) {
+        console.log(`重置临时用户: ${tempUser._id}`);
+        console.log(`  - 重置前: ${tempUser.discoverQuota.count}/${tempUser.discoverQuota.dailyLimit}`);
+      }
       
       // 重置配额
       tempUser.discoverQuota.count = 0;
       tempUser.discoverQuota.lastDate = '';
       await tempUser.save();
       
-      console.log('\n✅ 临时用户配额已重置');
-      console.log(`  - 剩余次数: ${tempUser.discoverQuota.dailyLimit}/${tempUser.discoverQuota.dailyLimit}`);
-      return;
+      if (hadQuota) {
+        console.log(`  - 重置后: 0/${tempUser.discoverQuota.dailyLimit}\n`);
+        tempUserResetCount++;
+      }
     }
     
-    // 用户不存在
-    console.log('⚠️  用户不存在');
-    console.log('提示: 用户可能还未使用过发现功能');
+    console.log(`✅ 临时用户配额重置完成: ${tempUserResetCount}/${tempUsers.length} 个临时用户有配额被重置\n`);
+    
+    console.log('📈 总计:');
+    console.log(`  - 真实用户: ${userResetCount} 个被重置`);
+    console.log(`  - 临时用户: ${tempUserResetCount} 个被重置`);
+    console.log(`  - 总计: ${userResetCount + tempUserResetCount} 个用户配额已重置`);
     
   } catch (error) {
     console.error('❌ 重置配额失败:', error);
@@ -78,7 +91,7 @@ async function resetQuota() {
 async function main() {
   try {
     await connectDB();
-    await resetQuota();
+    await resetAllQuotas();
     console.log('\n✅ 操作完成！\n');
   } catch (error) {
     console.error('\n❌ 脚本执行失败:', error);
