@@ -37,6 +37,8 @@ app.use('/api/admin', require('./routes/admin'));
 // 七牛云图片上传路由 (独立模块)
 app.use('/api/qiniu', require('./routes/qiniu'));
 
+app.use('/api/notifications', require('./routes/notifications'));
+
 // 健康检查
 app.get('/health', (req, res) => {
   res.json({ status: 'OK', message: '服务器运行正常' });

@@ -2,7 +2,9 @@
  * 分析用户活跃情况
  */
 
-require('dotenv').config();
+const path = require('path');
+// 从项目根目录加载 .env 文件
+require('dotenv').config({ path: path.join(__dirname, '../../.env') });
 const mongoose = require('mongoose');
 const User = require('../../models/User');
 const TempUser = require('../../models/TempUser');
@@ -174,6 +176,7 @@ async function analyzeUsers() {
 }
 
 analyzeUsers();
+
 
 
 

@@ -11,6 +11,8 @@ const mongoose = require('mongoose');
 const { updateCircleActivity } = require('../utils/circleUtils');
 const { deleteQiniuFiles } = require('../utils/qiniuUtils');
 
+const { sendNotification } = require('../services/notification.service');
+
 const router = express.Router();
 
 // 创建帖子
@@ -75,6 +77,32 @@ router.post('/', checkOpenid, checkImagesMiddleware, requirePermission('circle',
   if (req.imageDeletionId) {
     cancelImageDeletion(req.imageDeletionId);
   }
+
+  // 异步推送发帖通知给圈子其他成员
+  setImmediate(async () => {
+    const { TEMPLATES } = require('../services/notification.service');
+    const circle = await Circle.findById(circleId, 'name members');
+    if (!circle) return;
+
+    const otherMemberIds = circle.members
+      .map(m => m.toString())
+      .filter(id => id !== req.user._id);
+
+    if (otherMemberIds.length === 0) return;
+
+    const members = await User.find(
+      { _id: { $in: otherMemberIds }, subscribedTemplates: TEMPLATES.post.id },
+      '_id'
+    );
+
+    for (const member of members) {
+      sendNotification(member._id, 'post', {
+        fromUsername: req.user.username,
+        content: content?.slice(0, 20) || '分享了一条动态',
+        circleName: circle.name,
+      });
+    }
+  });
 
   res.status(201).json({
     success: true,
@@ -171,9 +199,23 @@ router.post('/:id/like', checkOpenid, requirePermission('post', 'access'), catch
     await Post.findByIdAndUpdate(postId, {
       $addToSet: { likes: userId }
     });
-    
+
     // 只在点赞时更新朋友圈活动时间
     updateCircleActivity(post.circle._id);
+
+    // 异步推送通知给帖子作者（不通知自己）
+    const authorId = post.author._id ? post.author._id.toString() : post.author.toString();
+    if (authorId !== userId) {
+      setImmediate(async () => {
+        const author = await User.findById(authorId, 'subscribedTemplates');
+        if (author?.subscribedTemplates?.includes(require('../services/notification.service').TEMPLATES.like.id)) {
+          sendNotification(authorId, 'like', {
+            postTitle: post.content?.slice(0, 20) || '帖子',
+            fromUsername: req.user.username,
+          });
+        }
+      });
+    }
   }
 
   const updatedPost = await Post.findById(postId, 'likes')
@@ -260,6 +302,36 @@ router.post('/:id/comments', checkOpenid, requirePermission('post', 'access'), [
   );
 
   updateCircleActivity(post.circle._id);
+
+  // 异步推送通知（不通知自己）
+  const authorId = post.author._id ? post.author._id.toString() : post.author.toString();
+  setImmediate(async () => {
+    const circle = await require('../models/Circle').findById(post.circle._id, 'name');
+    const circleName = circle?.name || '朋友圈';
+    const contentPreview = content.slice(0, 20);
+
+    if (replyToUserOpenid && replyToUserOpenid !== userId) {
+      // 回复评论：通知被回复的人
+      const replyTarget = await User.findById(replyToUserOpenid, 'subscribedTemplates');
+      if (replyTarget?.subscribedTemplates?.includes(require('../services/notification.service').TEMPLATES.reply.id)) {
+        sendNotification(replyToUserOpenid, 'reply', {
+          postTitle: post.content?.slice(0, 20) || '帖子',
+          content: contentPreview,
+          fromUsername: req.user.username,
+        });
+      }
+    } else if (!replyToUserOpenid && authorId !== userId) {
+      // 普通评论：通知帖子作者
+      const author = await User.findById(authorId, 'subscribedTemplates');
+      if (author?.subscribedTemplates?.includes(require('../services/notification.service').TEMPLATES.comment.id)) {
+        sendNotification(authorId, 'comment', {
+          circleName,
+          content: contentPreview,
+          fromUsername: req.user.username,
+        });
+      }
+    }
+  });
 
   res.status(201).json({
     success: true,
