@@ -56,22 +56,19 @@ router.get('/circles/:id', catchAsync(async (req, res) => {
   const { inviteCode } = req.query;
   const openid = req.body?.openid || req.query?.openid || req.headers?.['x-openid'];
 
-  // 查询朋友圈（不使用lean，因为需要调用实例方法）
-  const circle = await Circle.findById(id)
-    .populate('creator', 'username avatar')
-    .populate('members', 'username avatar');
+  // 先不 populate，用原始 openid 字符串做权限判断（防止 TempUser populate 为 null）
+  const circleRaw = await Circle.findById(id);
 
-  // 检查朋友圈是否存在
-  if (!circle) {
+  if (!circleRaw) {
     throw new AppError('朋友圈不存在', 404);
   }
 
-  // 检查请求者是否是成员/创建者（包括 TempUser）
-  const isOwner = openid ? circle.isCreator(openid) : false;
-  const isMember = openid ? circle.isMember(openid) : false;
+  // 检查请求者是否是成员/创建者（基于原始字符串，不受 populate 影响）
+  const isOwner = openid ? circleRaw.isCreator(openid) : false;
+  const isMember = openid ? circleRaw.isMember(openid) : false;
 
   // 权限检查：公开朋友圈 或 有效邀请码 或 本人（创建者/成员）
-  const canAccess = circle.isPublic || circle.isValidInviteCode(inviteCode) || isOwner || isMember;
+  const canAccess = circleRaw.isPublic || circleRaw.isValidInviteCode(inviteCode) || isOwner || isMember;
 
   if (!canAccess) {
     const errorMsg = inviteCode
@@ -80,12 +77,17 @@ router.get('/circles/:id', catchAsync(async (req, res) => {
     throw new AppError(errorMsg, 403);
   }
 
+  // 权限通过后再 populate 用于返回展示数据
+  const circle = await Circle.findById(id)
+    .populate('creator', 'username avatar')
+    .populate('members', 'username avatar');
+
   const isInviteMode = !!inviteCode;
 
   const currentUserStatus = {
     isMember: isMember,
     isOwner: isOwner,
-    hasApplied: openid ? circle.isApplier(openid) : false,
+    hasApplied: openid ? circleRaw.isApplier(openid) : false,
     isInvited: isInviteMode,
     canView: true,
     canPost: isMember || isOwner
