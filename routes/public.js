@@ -54,6 +54,7 @@ router.get('/circles/random', checkTempOpenidAutoCreate, randomCircleController.
 router.get('/circles/:id', catchAsync(async (req, res) => {
   const { id } = req.params;
   const { inviteCode } = req.query;
+  const openid = req.body?.openid || req.query?.openid || req.headers?.['x-openid'];
 
   // 查询朋友圈（不使用lean，因为需要调用实例方法）
   const circle = await Circle.findById(id)
@@ -65,28 +66,29 @@ router.get('/circles/:id', catchAsync(async (req, res) => {
     throw new AppError('朋友圈不存在', 404);
   }
 
-  // 优雅的权限检查：公开朋友圈 或 有效邀请码
-  const canAccess = circle.isPublic || circle.isValidInviteCode(inviteCode);
-  
+  // 检查请求者是否是成员/创建者（包括 TempUser）
+  const isOwner = openid ? circle.isCreator(openid) : false;
+  const isMember = openid ? circle.isMember(openid) : false;
+
+  // 权限检查：公开朋友圈 或 有效邀请码 或 本人（创建者/成员）
+  const canAccess = circle.isPublic || circle.isValidInviteCode(inviteCode) || isOwner || isMember;
+
   if (!canAccess) {
-    const errorMsg = inviteCode 
+    const errorMsg = inviteCode
       ? '邀请码无效，请检查邀请链接是否正确'
       : '此为私密朋友圈，需要邀请码才能访问';
     throw new AppError(errorMsg, 403);
   }
 
-  // 构建未登录用户的状态信息
-  // 只要提供了 inviteCode 就视为邀请模式，不区分公开/私有
-  // 这样设计的好处：朋友圈主人切换公开/私有时，邀请链接仍然有效
   const isInviteMode = !!inviteCode;
-  
+
   const currentUserStatus = {
-    isMember: false,
-    isOwner: false,
-    hasApplied: false,
-    isInvited: isInviteMode,  // 通过邀请链接访问（公开或私有）
-    canView: true,  // 能访问到这里说明有查看权限
-    canPost: false  // 未登录用户不能发帖
+    isMember: isMember,
+    isOwner: isOwner,
+    hasApplied: openid ? circle.isApplier(openid) : false,
+    isInvited: isInviteMode,
+    canView: true,
+    canPost: isMember || isOwner
   };
 
   // 返回基础信息（不包含敏感数据）
@@ -146,21 +148,26 @@ router.get('/posts', [
   }
 
   const { circleId, page = 1, limit = 10, inviteCode } = req.query;
+  const openid = req.body?.openid || req.query?.openid || req.headers?.['x-openid'];
   const pageNum = parseInt(page);
   const limitNum = Math.min(parseInt(limit), 50); // 最大50条
 
   // 检查朋友圈是否存在
   const circle = await Circle.findById(circleId);
-  
+
   if (!circle) {
     throw new AppError('朋友圈不存在', 404);
   }
 
-  // 优雅的权限检查：公开朋友圈 或 有效邀请码
-  const canAccess = circle.isPublic || circle.isValidInviteCode(inviteCode);
-  
+  // 检查请求者是否是成员/创建者（包括 TempUser）
+  const isOwner = openid ? circle.isCreator(openid) : false;
+  const isMember = openid ? circle.isMember(openid) : false;
+
+  // 权限检查：公开朋友圈 或 有效邀请码 或 本人（创建者/成员）
+  const canAccess = circle.isPublic || circle.isValidInviteCode(inviteCode) || isOwner || isMember;
+
   if (!canAccess) {
-    const errorMsg = inviteCode 
+    const errorMsg = inviteCode
       ? '邀请码无效，无法查看此朋友圈的帖子'
       : '此为私密朋友圈，需要邀请码才能查看帖子';
     throw new AppError(errorMsg, 403);
