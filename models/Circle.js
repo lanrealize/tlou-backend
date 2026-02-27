@@ -77,17 +77,17 @@ circleSchema.index({ isPublic: 1, createdAt: -1 });
 
 // 检查用户是否是成员
 circleSchema.methods.isMember = function(userOpenid) {
-  // 获取creator的ID（处理populate情况）
-  const creatorId = typeof this.creator === 'object' ? this.creator._id : this.creator;
-  
+  // 获取creator的ID（处理populate情况，兼容 null）
+  const creatorId = this.creator && typeof this.creator === 'object' ? this.creator._id : this.creator;
+
   // 检查是否是创建者
   if (creatorId === userOpenid) {
     return true;
   }
-  
-  // 检查是否在成员列表中（处理populate情况）
+
+  // 检查是否在成员列表中（处理populate情况，兼容 null）
   return this.members.some(member => {
-    const memberId = typeof member === 'object' ? member._id : member;
+    const memberId = member && typeof member === 'object' ? member._id : member;
     return memberId === userOpenid;
   });
 };
@@ -106,10 +106,10 @@ circleSchema.methods.isApplier = function(userOpenid) {
   });
 };
 
-// 检查用户是否是创建者  
+// 检查用户是否是创建者
 circleSchema.methods.isCreator = function(userOpenid) {
-  // 获取creator的ID（处理populate情况）
-  const creatorId = typeof this.creator === 'object' ? this.creator._id : this.creator;
+  // 获取creator的ID（处理populate情况，兼容 null）
+  const creatorId = this.creator && typeof this.creator === 'object' ? this.creator._id : this.creator;
   return creatorId === userOpenid;
 };
 
