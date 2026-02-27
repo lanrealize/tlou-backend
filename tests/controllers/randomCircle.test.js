@@ -165,11 +165,12 @@ describe('随机Public朋友圈控制器测试', () => {
       expect(mockRes.status).not.toHaveBeenCalled();
     });
 
-    test('未登录用户也应该能访问随机public朋友圈', async () => {
-      mockReq.user = null; // 模拟未登录状态
-      mockReq.query = {
-        openid: 'temp_user_' + Date.now() // 使用临时 openid
-      };
+    test('temp用户（未注册）也应该能访问随机public朋友圈', async () => {
+      const tempOpenid = 'temp_user_' + Date.now();
+      const tempUser = await TempUser.create({ _id: tempOpenid });
+      mockReq.user = tempUser;
+      mockReq.isTemp = true;
+      mockReq.query = { openid: tempOpenid };
 
       await randomCircleController.getRandomPublicCircle(mockReq, mockRes);
 
@@ -180,21 +181,21 @@ describe('随机Public朋友圈控制器测试', () => {
       expect(responseData.data.circle).toBeDefined();
       expect(responseData.data.quota).toBeDefined();
       expect(responseData.data.quota.isTemp).toBe(true);
-      expect(responseData.data.randomInfo.visitedCount).toBe(0); // 未登录用户不会有访问历史统计
+      expect(responseData.data.randomInfo.visitedCount).toBe(0); // 未注册用户不会有访问历史统计
     });
 
-    test('没有提供openid时应该返回错误', async () => {
-      mockReq.query = {}; // 不提供 openid
+    test('没有提供openid时中间件会拦截，controller本身依赖req.user', async () => {
+      // controller 现在依赖中间件提供 req.user，不再自行检查 openid
+      // 此场景由 checkTempOpenidAutoCreate 中间件负责，在集成测试中覆盖
+      // 这里验证 controller 在 req.user 存在时能正常工作
+      mockReq.user = testUser1;
+      mockReq.isTemp = false;
 
       await randomCircleController.getRandomPublicCircle(mockReq, mockRes);
 
-      expect(mockRes.status).toHaveBeenCalledWith(400);
       const call = mockRes.json.mock.calls[0];
       const responseData = call[0];
-
-      expect(responseData.success).toBe(false);
-      expect(responseData.code).toBe('OPENID_REQUIRED');
-      expect(responseData.message).toContain('openid');
+      expect(responseData.success).toBe(true);
     });
   });
 
@@ -484,10 +485,10 @@ describe('随机Public朋友圈控制器测试', () => {
       await randomCircleController.getRandomPublicCircle(mockReq, mockRes);
       expect(mockRes.status).toHaveBeenCalledWith(429);
 
-      // 模拟新的一天（修改用户的lastDate）
-      const user = await User.findById(testUser1._id);
-      user.discoverQuota.lastDate = '2026-02-11'; // 昨天的日期
-      await user.save();
+      // 模拟新的一天（修改用户的lastDate并重新加载）
+      await User.findByIdAndUpdate(testUser1._id, { 'discoverQuota.lastDate': '2026-02-11' });
+      // 重新加载用户到 mockReq.user，模拟新请求时中间件重新查库
+      mockReq.user = await User.findById(testUser1._id);
 
       // 新的一天应该可以再次请求
       mockRes.json.mockClear();
@@ -504,6 +505,9 @@ describe('随机Public朋友圈控制器测试', () => {
 
     test('未登录用户应该有配额限制（每天3次）', async () => {
       const tempOpenid = 'temp_user_' + Date.now();
+      const tempUser = await TempUser.create({ _id: tempOpenid });
+      mockReq.user = tempUser;
+      mockReq.isTemp = true;
       mockReq.query = { openid: tempOpenid };
 
       // 前3次请求应该成功

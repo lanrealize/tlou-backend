@@ -1,7 +1,5 @@
 const Circle = require('../models/Circle');
 const Post = require('../models/Post');
-const User = require('../models/User');
-const TempUser = require('../models/TempUser');
 const { catchAsync, AppError } = require('../utils/errorHandler');
 
 /**
@@ -151,37 +149,9 @@ async function getRandomPublicCircle(req, res) {
       resetHistory = 'false'
     } = req.query || {};
 
-    // 从请求中获取 openid（必需）
-    const openid = req.body?.openid || req.query?.openid || req.headers?.['x-openid'];
-    
-    if (!openid) {
-      return res.status(400).json({
-        success: false,
-        code: 'OPENID_REQUIRED',
-        message: '请提供 openid 参数'
-      });
-    }
-    
-    let userId;
-    let quotaEntity; // 可以是 User 或 TempUser
-    
-    // 先查找真实用户
-    let user = await User.findById(openid);
-    if (user) {
-      userId = user._id;
-      quotaEntity = user;
-      console.log('✅ 真实用户已认证（openid）:', userId);
-    } else {
-      // 查找或创建临时用户
-      let tempUser = await TempUser.findById(openid);
-      if (!tempUser) {
-        tempUser = await TempUser.create({ _id: openid });
-        console.log('✅ 创建临时用户（openid）:', openid);
-      } else {
-        console.log('✅ 临时用户已认证（openid）:', openid);
-      }
-      quotaEntity = tempUser;
-    }
+    // req.user 由 checkTempOpenidAutoCreate 中间件提供（User 或 TempUser）
+    const quotaEntity = req.user;
+    const userId = req.isTemp ? null : req.user._id; // 仅注册用户记录访问历史
     
     // ========== 统一配额检查 ==========
     const quotaResult = quotaEntity.checkAndUpdateDiscoverQuota();

@@ -131,6 +131,9 @@ async function registerUser(req, res) {
     const deletedTempUser = await TempUser.findByIdAndDelete(openid);
     if (deletedTempUser) {
       console.log(`删除临时用户记录: ${openid}`);
+      if (deletedTempUser.trialCircleId || deletedTempUser.trialPostId) {
+        console.log(`试用数据自动归属新用户 - 朋友圈: ${deletedTempUser.trialCircleId}, 帖子: ${deletedTempUser.trialPostId}`);
+      }
     }
 
     console.log(`创建用户成功: ${openid}`);

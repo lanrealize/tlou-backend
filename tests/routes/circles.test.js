@@ -786,7 +786,7 @@ describe('Circles Routes Test', () => {
       
       // 添加申请者
       await publicCircle.updateOne({
-        $push: { appliers: applicant._id }
+        $push: { appliers: { userId: applicant._id, appliedAt: new Date() } }
       });
     });
 
@@ -857,7 +857,7 @@ describe('Circles Routes Test', () => {
       
       // 添加申请者
       await publicCircle.updateOne({
-        $push: { appliers: applicant._id }
+        $push: { appliers: { userId: applicant._id, appliedAt: new Date() } }
       });
     });
 
@@ -915,8 +915,13 @@ describe('Circles Routes Test', () => {
       
       // 添加申请者
       await publicCircle.updateOne({
-        $push: { 
-          appliers: [applicant1._id, applicant2._id] 
+        $push: {
+          appliers: {
+            $each: [
+              { userId: applicant1._id, appliedAt: new Date() },
+              { userId: applicant2._id, appliedAt: new Date() }
+            ]
+          }
         }
       });
     });
@@ -1069,7 +1074,7 @@ describe('Circles Routes Test', () => {
         name: '公开朋友圈',
         isPublic: true
       }, owner);
-      await publicCircle.updateOne({ $push: { appliers: applicant._id } });
+      await publicCircle.updateOne({ $push: { appliers: { userId: applicant._id, appliedAt: new Date() } } });
 
       const response = await request(app)
         .get(`/api/circles/${publicCircle._id}`)
@@ -1185,13 +1190,13 @@ describe('Circles Routes Test', () => {
       await Circle.deleteMany({ isPublic: true });
     });
 
-    test('should allow guest users (without openid) to get random public circles', async () => {
+    test('should allow temp users (with openid) to get random public circles', async () => {
       // 创建几个公开朋友圈
       const circle1 = await createTestCircle({
         name: '公开朋友圈1',
         isPublic: true
       }, testUser);
-      
+
       const circle2 = await createTestCircle({
         name: '公开朋友圈2',
         isPublic: true
@@ -1201,14 +1206,16 @@ describe('Circles Routes Test', () => {
       await createTestPost({
         images: ['https://example.com/image1.jpg']
       }, testUser, circle1);
-      
+
       await createTestPost({
         images: ['https://example.com/image2.jpg']
       }, testUser, circle2);
 
-      // 不提供openid
+      // 使用临时用户 openid（不在 User 表中，会自动创建 TempUser）
+      const tempOpenid = `temp_${Date.now()}`;
       const response = await request(app)
         .get('/api/public/circles/random')
+        .query({ openid: tempOpenid })
         .expect(200);
 
       expect(response.body.success).toBe(true);
@@ -1247,22 +1254,20 @@ describe('Circles Routes Test', () => {
     test('should return empty result when no public circles exist', async () => {
       // 确保没有公开朋友圈
       await Circle.deleteMany({ isPublic: true });
-      
+
+      const tempOpenid = `temp_${Date.now()}`;
       const response = await request(app)
         .get('/api/public/circles/random')
+        .query({ openid: tempOpenid })
         .expect(200);
 
-      expect(response.body).toEqual({
-        success: true,
-        message: '暂无可用的公开朋友圈（所有朋友圈都没有图片帖子）',
-        data: {
-          circle: null,
-          randomInfo: {
-            totalAvailable: 0,
-            visitedCount: 0,
-            isHistoryReset: false
-          }
-        }
+      expect(response.body.success).toBe(true);
+      expect(response.body.message).toBe('暂无可用的公开朋友圈（所有朋友圈都没有图片帖子）');
+      expect(response.body.data.circle).toBeNull();
+      expect(response.body.data.randomInfo).toEqual({
+        totalAvailable: 0,
+        visitedCount: 0,
+        isHistoryReset: false
       });
     });
   });
@@ -1439,7 +1444,7 @@ describe('Circles Routes Test', () => {
         name: '申请者朋友圈',
         isPublic: true
       }, otherUser);
-      await applierCircle.updateOne({ $push: { appliers: testUser._id } });
+      await applierCircle.updateOne({ $push: { appliers: { userId: testUser._id, appliedAt: new Date() } } });
 
       const response = await request(app)
         .get('/api/circles/my')

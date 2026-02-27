@@ -5,6 +5,17 @@ const tempUserSchema = new mongoose.Schema({
     type: String,
     required: true  // openid作为主键
   },
+  // 试用功能：允许临时用户创建一个朋友圈和发一个帖子
+  trialCircleId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Circle',
+    default: null
+  },
+  trialPostId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Post',
+    default: null
+  },
   discoverQuota: {
     count: { 
       type: Number, 
