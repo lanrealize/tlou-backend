@@ -55,28 +55,11 @@ function requirePermission(resourceType, permission, options = {}) {
             break;
 
           case 'member':
-            // 必须是成员（包括创建者）
-            hasPermission = circle.isMember(userId);
-            if (!hasPermission) {
-              // 根据HTTP方法返回不同的状态码
-              const statusCode = req.method === 'DELETE' ? 400 : 403;
-              return next(new AppError('您不是此朋友圈的成员', statusCode));
-            }
-            break;
-
           case 'access':
-            // 可以访问（公开 或 有任何角色 或 有效邀请码）
-            const { inviteCode } = req.query;
-            hasPermission = circle.isPublic || 
-                           circle.hasAnyRole(userId) || 
-                           circle.isValidInviteCode(inviteCode);
+            // 只有创建者可以访问自己的圈子
+            hasPermission = circle.isCreator(userId);
             if (!hasPermission) {
-              // 根据context返回不同的错误消息
-              if (inviteCode) {
-                return next(new AppError('邀请码无效或已过期', 403));
-              }
-              const errorMsg = req.query.circleId ? '无权查看此朋友圈的帖子' : '私密朋友圈，无权访问';
-              return next(new AppError(errorMsg, 403));
+              return next(new AppError('无权访问此朋友圈', 403));
             }
             break;
 
@@ -125,14 +108,11 @@ function requirePermission(resourceType, permission, options = {}) {
             break;
 
           case 'access':
-            // 可以访问帖子（必须有权访问帖子所在的朋友圈）
+            // 可以访问帖子（必须是帖子所在圈子的创建者）
             if (!post.circle) {
               return next(new AppError('帖子所属朋友圈不存在', 404));
             }
-            const postInviteCode = req.query.inviteCode;
-            hasPermission = post.circle.isPublic || 
-                           post.circle.hasAnyRole(userId) || 
-                           post.circle.isValidInviteCode(postInviteCode);
+            hasPermission = post.circle.isCreator(userId);
             if (!hasPermission) {
               return next(new AppError('无权访问此帖子', 403));
             }

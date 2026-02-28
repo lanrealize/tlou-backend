@@ -13,7 +13,6 @@ describe('Post Model Test', () => {
         author: author._id,
         circle: circle._id,
         images: ['image1.jpg', 'image2.jpg'],
-        likes: [],
         comments: []
       };
 
@@ -23,7 +22,7 @@ describe('Post Model Test', () => {
       expect(post.author.toString()).toBe(author._id.toString());
       expect(post.circle.toString()).toBe(circle._id.toString());
       expect(post.images).toEqual(postData.images);
-      expect(post.likes).toEqual([]);
+      expect(post.reactions).toEqual([]);
       expect(post.comments).toEqual([]);
       expect(post._id).toBeDefined();
       expect(post.createdAt).toBeDefined();
@@ -92,10 +91,10 @@ describe('Post Model Test', () => {
       expect(post.images).toEqual([]);
     });
 
-    test('should set default likes to empty array', async () => {
+    test('should set default reactions to empty array', async () => {
       const author = await createTestUser();
       const circle = await createTestCircle({}, author);
-      
+
       const postData = {
         content: '测试帖子内容',
         author: author._id,
@@ -103,7 +102,7 @@ describe('Post Model Test', () => {
       };
 
       const post = await Post.create(postData);
-      expect(post.likes).toEqual([]);
+      expect(post.reactions).toEqual([]);
     });
 
     test('should set default comments to empty array', async () => {
@@ -121,26 +120,10 @@ describe('Post Model Test', () => {
     });
   });
 
-  describe('Post Virtual Fields', () => {
-    test('should return correct like count', async () => {
-      const author = await createTestUser();
-      const liker1 = await createTestUser();
-      const liker2 = await createTestUser();
-      const circle = await createTestCircle({}, author);
-      
-      const post = await Post.create({
-        content: '测试帖子内容',
-        author: author._id,
-        circle: circle._id,
-        likes: [liker1._id, liker2._id]
-      });
-
-      expect(post.likeCount).toBe(2);
-    });
-
-    test('should return zero like count for new post', async () => {
+  describe('Post Reactions', () => {
+    test('should default reactions to empty array', async () => {
       const post = await createTestPost();
-      expect(post.likeCount).toBe(0);
+      expect(post.reactions).toEqual([]);
     });
   });
 
@@ -236,25 +219,6 @@ describe('Post Model Test', () => {
       expect(populatedPost.circle.creator.toString()).toBe(author._id.toString());
     });
 
-    test('should populate likes correctly', async () => {
-      const author = await createTestUser();
-      const liker1 = await createTestUser();
-      const liker2 = await createTestUser();
-      const circle = await createTestCircle({}, author);
-      
-      const post = await Post.create({
-        content: '测试帖子内容',
-        author: author._id,
-        circle: circle._id,
-        likes: [liker1._id, liker2._id]
-      });
-
-      const populatedPost = await Post.findById(post._id).populate('likes');
-      
-      expect(populatedPost.likes).toHaveLength(2);
-      expect(populatedPost.likes[0].username).toBe(liker1.username);
-      expect(populatedPost.likes[1].username).toBe(liker2.username);
-    });
   });
 
   describe('Post Indexes', () => {
@@ -278,21 +242,20 @@ describe('Post Model Test', () => {
   });
 
   describe('Post JSON Serialization', () => {
-    test('should include virtual fields in JSON', async () => {
+    test('should include imageDescription field in JSON', async () => {
       const author = await createTestUser();
-      const liker = await createTestUser();
       const circle = await createTestCircle({}, author);
-      
+
       const post = await Post.create({
         content: '测试帖子内容',
         author: author._id,
         circle: circle._id,
-        likes: [liker._id]
+        imageDescription: '一张美丽的日落照片'
       });
 
       const postJson = post.toJSON();
-      
-      expect(postJson.likeCount).toBe(1);
+
+      expect(postJson.imageDescription).toBe('一张美丽的日落照片');
       expect(postJson._id).toBeDefined();
       expect(postJson.content).toBe('测试帖子内容');
     });

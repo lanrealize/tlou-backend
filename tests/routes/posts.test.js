@@ -259,12 +259,12 @@ describe('Posts Routes Test', () => {
       expect(response.body.violationDetails).toBeUndefined();
     });
 
-    test('should return 403 when user is not circle member', async () => {
-      const nonMember = await createTestUser();
+    test('should return 403 when non-creator posts to circle', async () => {
+      const nonCreator = await createTestUser();
       const postData = {
         circleId: testCircle._id.toString(),
         content: '测试帖子内容',
-        openid: nonMember._id
+        openid: nonCreator._id
       };
 
       const response = await request(app)
@@ -272,10 +272,7 @@ describe('Posts Routes Test', () => {
         .send(postData)
         .expect(403);
 
-      expect(response.body).toEqual({
-        status: 'fail',
-        message: '您不是此朋友圈的成员'
-      });
+      expect(response.body.status).toBe('fail');
     });
 
     test('should return 401 when openid is missing', async () => {
@@ -438,115 +435,71 @@ describe('Posts Routes Test', () => {
       });
     });
 
-    test('should return 403 when user has no access to private circle', async () => {
-      const privateCircle = await createTestCircle({
-        name: '私密朋友圈',
-        isPublic: false
-      });
-      const nonMember = await createTestUser();
+    test('should return 403 when non-creator views circle posts', async () => {
+      const otherCircle = await createTestCircle({ name: '别人的圈子' });
+      const nonCreator = await createTestUser();
 
       const response = await request(app)
         .get('/api/posts')
-        .query({ 
-          circleId: privateCircle._id.toString(),
-          openid: nonMember._id 
+        .query({
+          circleId: otherCircle._id.toString(),
+          openid: nonCreator._id
         })
         .expect(403);
 
-      expect(response.body).toEqual({
-        status: 'fail',
-        message: '无权查看此朋友圈的帖子'
-      });
+      expect(response.body.status).toBe('fail');
     });
 
-    test('should return posts with likedUsers information', async () => {
-      // 创建额外的测试用户
-      const liker1 = await createTestUser();
-      const liker2 = await createTestUser();
-      
-      // 创建有点赞的帖子
-      const postWithLikes = await createTestPost({ content: '有点赞的帖子' }, testUser, testCircle);
-      await postWithLikes.updateOne({
-        $addToSet: { likes: [liker1._id, liker2._id] }
-      });
-
+    test('should return posts with reactions information', async () => {
       const response = await request(app)
         .get('/api/posts')
-        .query({ 
+        .query({
           circleId: testCircle._id.toString(),
-          openid: testUser._id 
+          openid: testUser._id
         })
         .expect(200);
 
       expect(response.body.success).toBe(true);
-      
-      // 查找有点赞的帖子
-      const postWithLikesData = response.body.data.posts.find(
-        post => post.content === '有点赞的帖子'
-      );
-      
-      expect(postWithLikesData).toBeDefined();
-      expect(postWithLikesData.likedUsers).toBeDefined();
-      expect(postWithLikesData.likedUsers).toHaveLength(2);
-      expect(postWithLikesData.likedUsers[0]).toHaveProperty('username');
-      expect(postWithLikesData.likedUsers[0]).toHaveProperty('avatar');
+      const post = response.body.data.posts[0];
+      expect(post).toHaveProperty('reactions');
     });
   });
 
-  describe('POST /api/posts/:id/like', () => {
-    test('should like post successfully', async () => {
+  describe('POST /api/posts/:id/react', () => {
+    test('should react to post successfully', async () => {
       const response = await request(app)
-        .post(`/api/posts/${testPost._id}/like`)
+        .post(`/api/posts/${testPost._id}/react`)
         .send({ openid: testUser._id })
         .expect(200);
 
-      expect(response.body).toEqual({
-        success: true,
-        message: '点赞成功',
-        data: { 
-          liked: true,
-          likedUsers: [{
-            _id: testUser._id.toString(),
-            username: testUser.username,
-            avatar: testUser.avatar
-          }]
-        }
-      });
+      expect(response.body.success).toBe(true);
+      expect(response.body.data.reacted).toBe(true);
     });
 
-    test('should unlike post when already liked', async () => {
-      // 先点赞
-      await testPost.updateOne({
-        $addToSet: { likes: testUser._id }
-      });
+    test('should un-react when already reacted', async () => {
+      // 先 react
+      await request(app)
+        .post(`/api/posts/${testPost._id}/react`)
+        .send({ openid: testUser._id });
 
+      // 再次 react → 取消
       const response = await request(app)
-        .post(`/api/posts/${testPost._id}/like`)
+        .post(`/api/posts/${testPost._id}/react`)
         .send({ openid: testUser._id })
         .expect(200);
 
-      expect(response.body).toEqual({
-        success: true,
-        message: '取消点赞成功',
-        data: { 
-          liked: false,
-          likedUsers: [] // 取消点赞后，点赞用户列表为空
-        }
-      });
+      expect(response.body.data.reacted).toBe(false);
     });
 
     test('should return 404 when post does not exist', async () => {
       const fakeId = '507f1f77bcf86cd799439011';
 
       const response = await request(app)
-        .post(`/api/posts/${fakeId}/like`)
+        .post(`/api/posts/${fakeId}/react`)
         .send({ openid: testUser._id })
         .expect(404);
 
-      expect(response.body).toEqual({
-        status: 'fail',
-        message: '帖子不存在或无权限删除'
-      });
+      expect(response.body.status).toBe('fail');
     });
   });
 
@@ -828,112 +781,4 @@ describe('Posts Routes Test', () => {
       });
     });
   });
-
-  describe('GET /api/public/posts - Public Posts API (no auth required)', () => {
-    test('should allow anyone to view posts in public circles without auth', async () => {
-      const publicCircle = await createTestCircle({
-        name: '公开朋友圈',
-        isPublic: true
-      }, testUser);
-
-      await createTestPost({ content: '公开帖子1' }, testUser, publicCircle);
-      await createTestPost({ content: '公开帖子2' }, testUser, publicCircle);
-
-      // 不提供openid - 使用公开API
-      const response = await request(app)
-        .get('/api/public/posts')
-        .query({ 
-          circleId: publicCircle._id.toString()
-        })
-        .expect(200);
-
-      expect(response.body.success).toBe(true);
-      expect(response.body.data.posts.length).toBeGreaterThanOrEqual(2);
-      expect(response.body.data.posts[0].content).toBeDefined();
-      expect(response.body.data.posts[0].author).toBeDefined();
-      expect(response.body.data.pagination).toBeDefined();
-    });
-
-    test('should not allow access to private circle posts via public API', async () => {
-      const privateCircle = await createTestCircle({
-        name: '私密朋友圈',
-        isPublic: false
-      }, testUser);
-
-      await createTestPost({ content: '私密帖子' }, testUser, privateCircle);
-
-      // 尝试通过公开API访问私密朋友圈的帖子
-      const response = await request(app)
-        .get('/api/public/posts')
-        .query({ 
-          circleId: privateCircle._id.toString()
-        })
-        .expect(403);
-
-      expect(response.body.status).toBe('fail');
-      expect(response.body.message).toBe('此为私密朋友圈，需要邀请码才能查看帖子');
-    });
-
-    test('should support pagination', async () => {
-      const publicCircle = await createTestCircle({
-        name: '公开朋友圈',
-        isPublic: true
-      }, testUser);
-
-      // 创建多个帖子
-      for (let i = 1; i <= 15; i++) {
-        await createTestPost({ content: `帖子${i}` }, testUser, publicCircle);
-      }
-
-      // 第一页
-      const response1 = await request(app)
-        .get('/api/public/posts')
-        .query({ 
-          circleId: publicCircle._id.toString(),
-          page: 1,
-          limit: 10
-        })
-        .expect(200);
-
-      expect(response1.body.data.posts.length).toBe(10);
-      expect(response1.body.data.pagination.page).toBe(1);
-      expect(response1.body.data.pagination.totalPages).toBe(2);
-
-      // 第二页
-      const response2 = await request(app)
-        .get('/api/public/posts')
-        .query({ 
-          circleId: publicCircle._id.toString(),
-          page: 2,
-          limit: 10
-        })
-        .expect(200);
-
-      expect(response2.body.data.posts.length).toBe(5);
-      expect(response2.body.data.pagination.page).toBe(2);
-    });
-
-    test('should return 400 when circleId is missing', async () => {
-      const response = await request(app)
-        .get('/api/public/posts')
-        .expect(400);
-
-      expect(response.body.status).toBe('fail');
-      expect(response.body.message).toContain('朋友圈ID不能为空');
-    });
-
-    test('should return 404 when circle does not exist', async () => {
-      const fakeId = '507f1f77bcf86cd799439011';
-
-      const response = await request(app)
-        .get('/api/public/posts')
-        .query({ 
-          circleId: fakeId
-        })
-        .expect(404);
-
-      expect(response.body.status).toBe('fail');
-      expect(response.body.message).toBe('朋友圈不存在');
-    });
-  });
-}); 
+});

@@ -73,41 +73,6 @@ describe('Member Cleanup Utils', () => {
       expect(stats.deletedComments).toBeGreaterThan(0);
     });
 
-    test('should remove all likes by user in circle', async () => {
-      const user1 = await createTestUser({ username: 'user1', openid: 'openid1' });
-      const user2 = await createTestUser({ username: 'user2', openid: 'openid2' });
-      const circle = await createTestCircle({}, user1);
-      
-      // user1 发帖，user2 点赞
-      const post1 = await createTestPost({ content: '帖子1' }, user1, circle);
-      const post2 = await createTestPost({ content: '帖子2' }, user1, circle);
-      
-      // 添加 user2 的点赞
-      await Post.findByIdAndUpdate(post1._id, {
-        $push: { likes: user2._id }
-      });
-      
-      await Post.findByIdAndUpdate(post2._id, {
-        $push: { likes: user2._id }
-      });
-      
-      // 验证点赞已创建
-      let postWithLikes1 = await Post.findById(post1._id);
-      let postWithLikes2 = await Post.findById(post2._id);
-      expect(postWithLikes1.likes.length).toBe(1);
-      expect(postWithLikes2.likes.length).toBe(1);
-      
-      // 执行清理
-      const stats = await cleanupUserInCircle(user2._id, circle._id);
-      
-      // 验证点赞已删除
-      postWithLikes1 = await Post.findById(post1._id);
-      postWithLikes2 = await Post.findById(post2._id);
-      expect(postWithLikes1.likes.length).toBe(0);
-      expect(postWithLikes2.likes.length).toBe(0);
-      expect(stats.deletedLikes).toBeGreaterThan(0);
-    });
-
     test('should update circle post statistics', async () => {
       const user = await createTestUser();
       const circle = await createTestCircle({}, user);
@@ -138,31 +103,26 @@ describe('Member Cleanup Utils', () => {
       await createTestPost({ content: 'user2的帖子1' }, user2, circle);
       await createTestPost({ content: 'user2的帖子2' }, user2, circle);
       
-      // user1 发1个帖子，user2 评论和点赞
+      // user1 发1个帖子，user2 评论
       const post1 = await createTestPost({ content: 'user1的帖子' }, user1, circle);
       await Post.findByIdAndUpdate(post1._id, {
-        $push: {
-          comments: { author: user2._id, content: 'user2的评论' },
-          likes: user2._id
-        }
+        $push: { comments: { author: user2._id, content: 'user2的评论' } }
       });
-      
+
       // 执行清理 user2
       const stats = await cleanupUserInCircle(user2._id, circle._id);
-      
+
       // 验证：user2 的帖子被删除
       const user2Posts = await Post.find({ author: user2._id, circle: circle._id });
       expect(user2Posts.length).toBe(0);
-      
-      // 验证：user2 的评论和点赞被删除
+
+      // 验证：user2 的评论被删除
       const post1After = await Post.findById(post1._id);
       expect(post1After.comments.length).toBe(0);
-      expect(post1After.likes.length).toBe(0);
-      
+
       // 验证统计
       expect(stats.deletedPosts).toBe(2);
       expect(stats.deletedComments).toBeGreaterThan(0);
-      expect(stats.deletedLikes).toBeGreaterThan(0);
     });
 
     test('should not affect other circles', async () => {
@@ -194,7 +154,6 @@ describe('Member Cleanup Utils', () => {
       
       expect(stats.deletedPosts).toBe(0);
       expect(stats.deletedComments).toBe(0);
-      expect(stats.deletedLikes).toBe(0);
       expect(stats.clearedReplyTo).toBe(0);
     });
 
@@ -319,20 +278,16 @@ describe('Member Cleanup Utils', () => {
       await createTestPost({ content: '帖子1' }, user2, circle);
       await createTestPost({ content: '帖子2' }, user2, circle);
       
-      // user1 发帖，user2 评论和点赞
+      // user1 发帖，user2 评论
       const post1 = await createTestPost({ content: 'user1帖子' }, user1, circle);
       await Post.findByIdAndUpdate(post1._id, {
-        $push: {
-          comments: { author: user2._id, content: '评论' },
-          likes: user2._id
-        }
+        $push: { comments: { author: user2._id, content: '评论' } }
       });
-      
+
       const stats = await getUserActivityStats(user2._id, circle._id);
-      
+
       expect(stats.postsCount).toBe(2);
       expect(stats.commentsCount).toBe(1);
-      expect(stats.likesCount).toBe(1);
     });
 
     test('should return zero stats for user with no activity', async () => {
@@ -343,7 +298,6 @@ describe('Member Cleanup Utils', () => {
       
       expect(stats.postsCount).toBe(0);
       expect(stats.commentsCount).toBe(0);
-      expect(stats.likesCount).toBe(0);
     });
 
     test('should only count activity in specified circle', async () => {

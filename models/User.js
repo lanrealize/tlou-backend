@@ -28,6 +28,11 @@ const userSchema = new mongoose.Schema({
     type: Boolean,
     default: false
   },
+  // AI 用户标识
+  isAI: {
+    type: Boolean,
+    default: false
+  },
   // 订阅消息：记录用户已订阅的模板（前端上报 accept 后写入）
   subscribedTemplates: {
     type: [String],

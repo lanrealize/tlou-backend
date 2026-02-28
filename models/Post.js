@@ -38,10 +38,15 @@ const postSchema = new mongoose.Schema({
     },
     default: []
   },
-  likes: [{
-    type: String,  // openid数组
-    ref: 'User'
+  reactions: [{
+    user: { type: String, ref: 'User', required: true },
+    type: { type: String, default: 'like' }
   }],
+  // 图片的文字摘要，供 AI 历史上下文使用（避免每次带原图消耗 token）
+  imageDescription: {
+    type: String,
+    default: ''
+  },
   comments: [{
     _id: {
       type: mongoose.Schema.Types.ObjectId,
@@ -73,13 +78,5 @@ const postSchema = new mongoose.Schema({
 // 添加复合索引：circle + createdAt（用于查询特定朋友圈的帖子）
 postSchema.index({ circle: 1, createdAt: -1 });
 
-// 虚拟字段：点赞数
-postSchema.virtual('likeCount').get(function() {
-  return this.likes.length;
-});
-
-// 确保虚拟字段在JSON中显示
-postSchema.set('toJSON', { virtuals: true });
-postSchema.set('toObject', { virtuals: true });
 
 module.exports = mongoose.model('Post', postSchema); 

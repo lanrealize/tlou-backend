@@ -34,8 +34,6 @@ const createTestCircle = async (circleData = {}, creator = null) => {
   const defaultCircle = {
     name: `测试朋友圈_${Date.now()}`,
     creator: creator._id,
-    members: [creator._id],
-    isPublic: true,
     ...circleData
   };
   
@@ -56,7 +54,6 @@ const createTestPost = async (postData = {}, author = null, circle = null) => {
     author: author._id,
     circle: circle._id,
     images: [],
-    likes: [],
     comments: [],
     ...postData
   };

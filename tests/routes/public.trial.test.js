@@ -113,15 +113,15 @@ describe('Trial API Tests - POST /api/public/trial/circle & /api/public/trial/po
       expect(response.body.status).toBe('fail');
     });
 
-    test('创建的朋友圈默认是私密的', async () => {
+    test('创建的朋友圈有默认名称', async () => {
       await TempUser.create({ _id: tempOpenid });
 
       const response = await request(app)
         .post('/api/public/trial/circle')
-        .send({ openid: tempOpenid, name: '试用圈' })
+        .send({ openid: tempOpenid })
         .expect(201);
 
-      expect(response.body.data.circle.isPublic).toBe(false);
+      expect(response.body.data.circle.name).toBe('我的朋友圈');
     });
   });
 

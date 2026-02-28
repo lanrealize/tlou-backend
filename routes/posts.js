@@ -5,13 +5,11 @@ const Circle = require('../models/Circle');
 const { checkOpenid } = require('../middleware/openidAuth');
 const { requirePermission } = require('../middleware/circleAuth');
 const { checkImagesMiddleware, cancelImageDeletion } = require('../middleware/imageCheck');
-const { catchAsync, AppError, globalErrorHandler } = require('../utils/errorHandler');
+const { catchAsync, AppError } = require('../utils/errorHandler');
 const User = require('../models/User');
 const mongoose = require('mongoose');
 const { updateCircleActivity } = require('../utils/circleUtils');
 const { deleteQiniuFiles } = require('../utils/qiniuUtils');
-
-const { sendNotification } = require('../services/notification.service');
 
 const router = express.Router();
 
@@ -32,11 +30,8 @@ router.post('/', checkOpenid, checkImagesMiddleware, requirePermission('circle',
     .withMessage('图片必须是数组格式')
     .custom((images) => {
       if (!images) return true;
-      
       for (const img of images) {
-        if (typeof img === 'string') {
-          continue;
-        }
+        if (typeof img === 'string') continue;
         if (typeof img === 'object' && img !== null) {
           if (typeof img.url !== 'string' || !img.url.trim()) {
             throw new Error('图片对象必须包含有效的url字段');
@@ -61,8 +56,6 @@ router.post('/', checkOpenid, checkImagesMiddleware, requirePermission('circle',
 
   const { circleId, content, images } = req.body;
 
-  // req.circle 已由中间件提供，权限已检查
-
   const post = await Post.create({
     author: req.user._id,
     circle: circleId,
@@ -77,32 +70,6 @@ router.post('/', checkOpenid, checkImagesMiddleware, requirePermission('circle',
   if (req.imageDeletionId) {
     cancelImageDeletion(req.imageDeletionId);
   }
-
-  // 异步推送发帖通知给圈子其他成员
-  setImmediate(async () => {
-    const { TEMPLATES } = require('../services/notification.service');
-    const circle = await Circle.findById(circleId, 'name members');
-    if (!circle) return;
-
-    const otherMemberIds = circle.members
-      .map(m => m.toString())
-      .filter(id => id !== req.user._id);
-
-    if (otherMemberIds.length === 0) return;
-
-    const members = await User.find(
-      { _id: { $in: otherMemberIds }, subscribedTemplates: TEMPLATES.post.id },
-      '_id'
-    );
-
-    for (const member of members) {
-      sendNotification(member._id, 'post', {
-        fromUsername: req.user.username,
-        content: content?.slice(0, 20) || '分享了一条动态',
-        circleName: circle.name,
-      });
-    }
-  });
 
   res.status(201).json({
     success: true,
@@ -126,11 +93,9 @@ router.get('/', checkOpenid, requirePermission('circle', 'access'), [
 
   const { circleId } = req.query;
 
-  // req.circle 已由中间件提供，权限已检查
-
   const posts = await Post.find({ circle: circleId })
     .populate('author', 'username avatar')
-    .populate('likes', 'username avatar')
+    .populate('reactions.user', 'username avatar')
     .sort({ createdAt: -1 });
 
   const userIds = new Set();
@@ -144,17 +109,15 @@ router.get('/', checkOpenid, requirePermission('circle', 'access'), [
   });
 
   const users = await User.find(
-    { _id: { $in: Array.from(userIds) } }, 
+    { _id: { $in: Array.from(userIds) } },
     'username avatar'
   );
-  
+
   const userMap = new Map(users.map(user => [user._id.toString(), user]));
 
   const postsWithPopulatedComments = posts.map(post => {
     const postObj = post.toObject();
-    
-    postObj.likedUsers = postObj.likes || [];
-    
+
     if (postObj.comments && postObj.comments.length > 0) {
       postObj.comments = postObj.comments.map(comment => ({
         ...comment,
@@ -169,7 +132,7 @@ router.get('/', checkOpenid, requirePermission('circle', 'access'), [
         } : null
       }));
     }
-    
+
     return postObj;
   });
 
@@ -179,77 +142,52 @@ router.get('/', checkOpenid, requirePermission('circle', 'access'), [
   });
 }));
 
-// 点赞/取消点赞（✅ 修复P0安全问题：增加权限检查）
-router.post('/:id/like', checkOpenid, requirePermission('post', 'access'), catchAsync(async (req, res) => {
+// reaction（点赞/取消点赞）
+router.post('/:id/react', checkOpenid, requirePermission('post', 'access'), catchAsync(async (req, res) => {
   const postId = req.params.id;
   const userId = req.user._id;
+  const type = req.body.type || 'like';
 
-  // req.post 和 req.circle 已由中间件提供，权限已检查
   const post = req.post;
 
-  const isLiked = post.likes.some(id => id.toString() === userId.toString());
+  const existingIndex = post.reactions.findIndex(
+    r => r.user.toString() === userId && r.type === type
+  );
 
-  if (isLiked) {
-    // 取消点赞
+  if (existingIndex !== -1) {
     await Post.findByIdAndUpdate(postId, {
-      $pull: { likes: userId }
+      $pull: { reactions: { user: userId, type } }
     });
-  } else {
-    // 点赞
-    await Post.findByIdAndUpdate(postId, {
-      $addToSet: { likes: userId }
+    return res.json({
+      success: true,
+      message: '取消成功',
+      data: { reacted: false }
     });
-
-    // 只在点赞时更新朋友圈活动时间
-    updateCircleActivity(post.circle._id);
-
-    // 异步推送通知给帖子作者（不通知自己）
-    const authorId = post.author._id ? post.author._id.toString() : post.author.toString();
-    if (authorId !== userId) {
-      setImmediate(async () => {
-        const author = await User.findById(authorId, 'subscribedTemplates');
-        if (author?.subscribedTemplates?.includes(require('../services/notification.service').TEMPLATES.like.id)) {
-          sendNotification(authorId, 'like', {
-            postTitle: post.content?.slice(0, 20) || '帖子',
-            fromUsername: req.user.username,
-          });
-        }
-      });
-    }
   }
 
-  const updatedPost = await Post.findById(postId, 'likes')
-    .populate('likes', 'username avatar');
+  await Post.findByIdAndUpdate(postId, {
+    $push: { reactions: { user: userId, type } }
+  });
+
+  updateCircleActivity(post.circle._id);
 
   res.json({
     success: true,
-    message: isLiked ? '取消点赞成功' : '点赞成功',
-    data: { 
-      liked: !isLiked,
-      likedUsers: updatedPost.likes
-    }
+    message: '成功',
+    data: { reacted: true }
   });
 }));
 
 // 删除帖子
 router.delete('/:id', checkOpenid, requirePermission('post', 'author'), catchAsync(async (req, res) => {
-  const postId = req.params.id;
-
-  // req.post 已由中间件提供，权限已检查（只有作者可以删除）
   const post = req.post;
 
-  // 异步删除七牛云文件
   if (post.images && post.images.length > 0) {
-    const imageUrls = post.images.map(img => {
-      if (typeof img === 'string') {
-        return img;
-      }
-      return img.url;
-    });
+    const imageUrls = post.images.map(img => typeof img === 'string' ? img : img.url);
     setImmediate(() => deleteQiniuFiles(imageUrls));
   }
 
-  await Post.findByIdAndDelete(postId);
+  await Post.findByIdAndDelete(req.params.id);
 
   res.json({
     success: true,
@@ -257,7 +195,7 @@ router.delete('/:id', checkOpenid, requirePermission('post', 'author'), catchAsy
   });
 }));
 
-// 添加评论（✅ 修复P0安全问题：增加权限检查）
+// 添加评论
 router.post('/:id/comments', checkOpenid, requirePermission('post', 'access'), [
   body('content')
     .notEmpty()
@@ -277,9 +215,6 @@ router.post('/:id/comments', checkOpenid, requirePermission('post', 'access'), [
   const postId = req.params.id;
   const { content, replyToUserOpenid } = req.body;
   const userId = req.user._id;
-
-  // req.post 和 req.circle 已由中间件提供，权限已检查
-  const post = req.post;
 
   if (replyToUserOpenid) {
     const replyToUser = await User.findById(replyToUserOpenid, 'username');
@@ -301,37 +236,7 @@ router.post('/:id/comments', checkOpenid, requirePermission('post', 'access'), [
     { $push: { comments: newComment } }
   );
 
-  updateCircleActivity(post.circle._id);
-
-  // 异步推送通知（不通知自己）
-  const authorId = post.author._id ? post.author._id.toString() : post.author.toString();
-  setImmediate(async () => {
-    const circle = await require('../models/Circle').findById(post.circle._id, 'name');
-    const circleName = circle?.name || '朋友圈';
-    const contentPreview = content.slice(0, 20);
-
-    if (replyToUserOpenid && replyToUserOpenid !== userId) {
-      // 回复评论：通知被回复的人
-      const replyTarget = await User.findById(replyToUserOpenid, 'subscribedTemplates');
-      if (replyTarget?.subscribedTemplates?.includes(require('../services/notification.service').TEMPLATES.reply.id)) {
-        sendNotification(replyToUserOpenid, 'reply', {
-          postTitle: post.content?.slice(0, 20) || '帖子',
-          content: contentPreview,
-          fromUsername: req.user.username,
-        });
-      }
-    } else if (!replyToUserOpenid && authorId !== userId) {
-      // 普通评论：通知帖子作者
-      const author = await User.findById(authorId, 'subscribedTemplates');
-      if (author?.subscribedTemplates?.includes(require('../services/notification.service').TEMPLATES.comment.id)) {
-        sendNotification(authorId, 'comment', {
-          circleName,
-          content: contentPreview,
-          fromUsername: req.user.username,
-        });
-      }
-    }
-  });
+  updateCircleActivity(req.post.circle._id);
 
   res.status(201).json({
     success: true,
@@ -358,7 +263,6 @@ router.delete('/:postId/comments/:commentId', checkOpenid, catchAsync(async (req
     throw new AppError('评论不存在', 404);
   }
 
-  // 只能删除自己的评论
   if (comment.author.toString() !== userId.toString()) {
     throw new AppError('无权删除此评论', 403);
   }
