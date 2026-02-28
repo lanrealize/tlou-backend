@@ -28,9 +28,6 @@ app.use('/api/wechat', require('./routes/wechat'));
 app.use('/api/circles', require('./routes/circles'));
 app.use('/api/posts', require('./routes/posts'));
 
-// 公开API路由 (无需认证，用于推广)
-app.use('/api/public', require('./routes/public'));
-
 // 管理员路由 (虚拟用户管理)
 app.use('/api/admin', require('./routes/admin'));
 

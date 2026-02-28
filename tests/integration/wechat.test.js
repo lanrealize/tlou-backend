@@ -2,19 +2,15 @@ const request = require('supertest');
 const express = require('express');
 const { createTestUser } = require('../helpers/testUtils');
 const { globalErrorHandler } = require('../../utils/errorHandler');
+const User = require('../../models/User');
 
-// 创建测试应用
 const app = express();
 app.use(express.json());
 
-// 模拟路由
 const wechatRoutes = require('../../routes/wechat');
 app.use('/api/wechat', wechatRoutes);
-
-// 添加错误处理中间件
 app.use(globalErrorHandler);
 
-// Mock axios for WeChat API
 jest.mock('axios');
 const axios = require('axios');
 
@@ -24,13 +20,8 @@ describe('WeChat Integration Test', () => {
   });
 
   describe('POST /api/wechat/get-openid', () => {
-    test('should return openid successfully with valid code', async () => {
-      const mockSession = {
-        openid: 'test_openid_123',
-        session_key: 'test_session_key'
-      };
-
-      axios.get.mockResolvedValue({ data: mockSession });
+    test('should return openid and create empty User on first visit', async () => {
+      axios.get.mockResolvedValue({ data: { openid: 'test_openid_123', session_key: 'key' } });
 
       const response = await request(app)
         .post('/api/wechat/get-openid')
@@ -40,10 +31,24 @@ describe('WeChat Integration Test', () => {
       expect(response.body).toEqual({
         success: true,
         message: '获取openid成功',
-        data: {
-          openid: 'test_openid_123'
-        }
+        data: { openid: 'test_openid_123' }
       });
+
+      // 验证 User 已被自动创建
+      const user = await User.findById('test_openid_123');
+      expect(user).not.toBeNull();
+      expect(user.username).toBe('');
+      expect(user.avatar).toBe('');
+    });
+
+    test('should be idempotent on repeated visits', async () => {
+      axios.get.mockResolvedValue({ data: { openid: 'repeat_openid' } });
+
+      await request(app).post('/api/wechat/get-openid').send({ code: 'code1' }).expect(200);
+      await request(app).post('/api/wechat/get-openid').send({ code: 'code2' }).expect(200);
+
+      const users = await User.find({ _id: 'repeat_openid' });
+      expect(users.length).toBe(1);
     });
 
     test('should return error when code is missing', async () => {
@@ -52,29 +57,18 @@ describe('WeChat Integration Test', () => {
         .send({})
         .expect(400);
 
-      expect(response.body).toEqual({
-        success: false,
-        message: 'code参数是必需的'
-      });
+      expect(response.body).toEqual({ success: false, message: 'code参数是必需的' });
     });
 
     test('should handle WeChat API error', async () => {
-      const mockSession = {
-        errcode: 40029,
-        errmsg: 'invalid code'
-      };
-
-      axios.get.mockResolvedValue({ data: mockSession });
+      axios.get.mockResolvedValue({ data: { errcode: 40029, errmsg: 'invalid code' } });
 
       const response = await request(app)
         .post('/api/wechat/get-openid')
         .send({ code: 'invalid_code' })
         .expect(400);
 
-      expect(response.body).toEqual({
-        success: false,
-        message: '微信登录失败: invalid code'
-      });
+      expect(response.body).toEqual({ success: false, message: '微信登录失败: invalid code' });
     });
 
     test('should handle network error', async () => {
@@ -85,17 +79,14 @@ describe('WeChat Integration Test', () => {
         .send({ code: 'test_code' })
         .expect(500);
 
-      expect(response.body).toEqual({
-        success: false,
-        message: '微信服务请求失败'
-      });
+      expect(response.body).toEqual({ success: false, message: '微信服务请求失败' });
     });
   });
 
   describe('POST /api/wechat/get-user-info', () => {
-    test('should return user info when user exists', async () => {
-      const existingUser = await createTestUser({
-        _id: 'test_openid_123',  // openid作为主键
+    test('should return user info with isProfileComplete=true', async () => {
+      await createTestUser({
+        _id: 'test_openid_123',
         username: 'test_user',
         avatar: 'https://example.com/avatar.jpg'
       });
@@ -110,26 +101,35 @@ describe('WeChat Integration Test', () => {
         message: '获取用户信息成功',
         data: {
           user: {
-            _id: 'test_openid_123',  // _id就是openid
+            _id: 'test_openid_123',
             username: 'test_user',
             avatar: 'https://example.com/avatar.jpg',
-            isAdmin: false
+            isAdmin: false,
+            isProfileComplete: true
           }
         }
       });
     });
 
-    test('should return null when user does not exist', async () => {
+    test('should return isProfileComplete=false for empty profile', async () => {
+      await User.create({ _id: 'empty_profile_openid' });
+
+      const response = await request(app)
+        .post('/api/wechat/get-user-info')
+        .send({ openid: 'empty_profile_openid' })
+        .expect(200);
+
+      expect(response.body.data.user.isProfileComplete).toBe(false);
+      expect(response.body.data.user.username).toBe('');
+    });
+
+    test('should return 404 when user does not exist', async () => {
       const response = await request(app)
         .post('/api/wechat/get-user-info')
         .send({ openid: 'nonexistent_openid' })
-        .expect(200);
+        .expect(404);
 
-      expect(response.body).toEqual({
-        success: true,
-        message: '用户不存在',
-        data: null
-      });
+      expect(response.body).toEqual({ success: false, message: '用户不存在' });
     });
 
     test('should return error when openid is missing', async () => {
@@ -138,111 +138,74 @@ describe('WeChat Integration Test', () => {
         .send({})
         .expect(400);
 
-      expect(response.body).toEqual({
-        success: false,
-        message: 'openid参数是必需的'
-      });
+      expect(response.body).toEqual({ success: false, message: 'openid参数是必需的' });
     });
   });
 
-  describe('POST /api/wechat/register', () => {
-    test('should create new user successfully', async () => {
+  describe('POST /api/wechat/complete-profile', () => {
+    test('should complete profile successfully', async () => {
+      await User.create({ _id: 'test_openid_456' });
+
       const response = await request(app)
-        .post('/api/wechat/register')
+        .post('/api/wechat/complete-profile')
         .send({
-          openid: 'test_openid_123',
+          openid: 'test_openid_456',
           username: 'new_user',
           avatar: 'https://example.com/avatar.jpg'
         })
-        .expect(201);
+        .expect(200);
 
       expect(response.body).toEqual({
         success: true,
-        message: '用户注册成功',
+        message: '用户资料完善成功',
         data: {
           user: expect.objectContaining({
-            _id: 'test_openid_123',  // _id就是openid
+            _id: 'test_openid_456',
             username: 'new_user',
-            avatar: 'https://example.com/avatar.jpg'
+            avatar: 'https://example.com/avatar.jpg',
+            isProfileComplete: true
           })
         }
       });
     });
 
-    test('should return error when openid is missing', async () => {
-      const response = await request(app)
-        .post('/api/wechat/register')
-        .send({
-          username: 'new_user',
-          avatar: 'https://example.com/avatar.jpg'
-        })
-        .expect(400);
-
-      expect(response.body).toEqual({
-        success: false,
-        message: 'openid、username和avatar参数都是必需的'
-      });
-    });
-
-    test('should return error when username is missing', async () => {
-      const response = await request(app)
-        .post('/api/wechat/register')
-        .send({
-          openid: 'test_openid_123',
-          avatar: 'https://example.com/avatar.jpg'
-        })
-        .expect(400);
-
-      expect(response.body).toEqual({
-        success: false,
-        message: 'openid、username和avatar参数都是必需的'
-      });
-    });
-
-    test('should return error when avatar is missing', async () => {
-      const response = await request(app)
-        .post('/api/wechat/register')
-        .send({
-          openid: 'test_openid_123',
-          username: 'new_user'
-        })
-        .expect(400);
-
-      expect(response.body).toEqual({
-        success: false,
-        message: 'openid、username和avatar参数都是必需的'
-      });
-    });
-
-    test('should return error when user already exists', async () => {
+    test('should return 409 when profile already complete', async () => {
       await createTestUser({
-        _id: 'test_openid_123',  // openid作为主键
-        username: 'existing_user'
+        _id: 'test_openid_789',
+        username: 'existing_user',
+        avatar: 'https://example.com/avatar.jpg'
       });
 
       const response = await request(app)
-        .post('/api/wechat/register')
+        .post('/api/wechat/complete-profile')
         .send({
-          openid: 'test_openid_123',
-          username: 'new_user',
-          avatar: 'https://example.com/avatar.jpg'
+          openid: 'test_openid_789',
+          username: 'new_name',
+          avatar: 'https://example.com/new.jpg'
         })
         .expect(409);
 
       expect(response.body).toEqual({
         success: false,
-        message: '用户已存在'
+        message: '用户资料已完善，请勿重复提交'
       });
     });
 
-    test('should handle complete registration flow', async () => {
-      // 先测试获取openid
-      const mockSession = {
-        openid: 'flow_test_openid',
-        session_key: 'test_session_key'
-      };
+    test('should return 400 when fields are missing', async () => {
+      const response = await request(app)
+        .post('/api/wechat/complete-profile')
+        .send({ openid: 'test_openid_123', username: 'new_user' })
+        .expect(400);
 
-      axios.get.mockResolvedValue({ data: mockSession });
+      expect(response.body).toEqual({
+        success: false,
+        message: 'openid、username和avatar参数都是必需的'
+      });
+    });
+
+    test('should handle complete onboarding flow', async () => {
+      // 1. 第一次打开小程序，get-openid 自动建 User
+      axios.get.mockResolvedValue({ data: { openid: 'flow_test_openid' } });
 
       const openidResponse = await request(app)
         .post('/api/wechat/get-openid')
@@ -251,33 +214,34 @@ describe('WeChat Integration Test', () => {
 
       expect(openidResponse.body.data.openid).toBe('flow_test_openid');
 
-      // 检查用户是否存在
+      // 2. 查用户信息，isProfileComplete=false，跳引导页
       const userInfoResponse = await request(app)
         .post('/api/wechat/get-user-info')
         .send({ openid: 'flow_test_openid' })
         .expect(200);
 
-      expect(userInfoResponse.body.data).toBeNull();
+      expect(userInfoResponse.body.data.user.isProfileComplete).toBe(false);
 
-      // 注册用户
-      const registerResponse = await request(app)
-        .post('/api/wechat/register')
+      // 3. 用户填写头像和名字
+      const completeResponse = await request(app)
+        .post('/api/wechat/complete-profile')
         .send({
           openid: 'flow_test_openid',
           username: 'flow_test_user',
           avatar: 'https://example.com/flow-avatar.jpg'
         })
-        .expect(201);
+        .expect(200);
 
-      expect(registerResponse.body.data.user._id).toBe('flow_test_openid');
+      expect(completeResponse.body.data.user.isProfileComplete).toBe(true);
 
-      // 再次检查用户信息，应该存在了
+      // 4. 再次查用户信息，isProfileComplete=true，进主页
       const userInfoResponse2 = await request(app)
         .post('/api/wechat/get-user-info')
         .send({ openid: 'flow_test_openid' })
         .expect(200);
 
       expect(userInfoResponse2.body.data.user.username).toBe('flow_test_user');
+      expect(userInfoResponse2.body.data.user.isProfileComplete).toBe(true);
     });
   });
-}); 
+});

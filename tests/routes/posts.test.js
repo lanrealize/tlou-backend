@@ -13,9 +13,7 @@ app.use(express.json());
 
 // 模拟路由
 const postsRoutes = require('../../routes/posts');
-const publicRoutes = require('../../routes/public');
 app.use('/api/posts', postsRoutes);
-app.use('/api/public', publicRoutes);
 
 // 添加错误处理中间件
 app.use(globalErrorHandler);

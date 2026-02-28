@@ -20,17 +20,10 @@ describe('User Model Test', () => {
       expect(user.updatedAt).toBeDefined();
     });
 
-    test('should require username', async () => {
-      const userData = {
-        _id: 'test_openid_123'  // openid作为主键，但缺少username
-      };
-
-      try {
-        await User.create(userData);
-        fail('Should have thrown validation error');
-      } catch (error) {
-        expect(error.errors.username).toBeDefined();
-      }
+    test('should allow empty username (profile not yet complete)', async () => {
+      const user = await User.create({ _id: 'test_openid_empty_username' });
+      expect(user.username).toBe('');
+      expect(user.avatar).toBe('');
     });
 
     test('should require openid', async () => {
