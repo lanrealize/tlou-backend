@@ -122,15 +122,13 @@ describe('WeChat Auth Controller Test', () => {
             _id: 'test_openid_123',
             username: 'test_user',
             avatar: 'https://example.com/avatar.jpg',
-            isAdmin: false,
-            isProfileComplete: true
+            isAdmin: false
           }
         }
       });
     });
 
-    test('should return isProfileComplete=false for empty profile', async () => {
-      // 模拟 getOpenid upsert 出来的空 User
+    test('should return empty username/avatar for profile not yet complete', async () => {
       await User.create({ _id: 'test_openid_empty' });
 
       const req = createMockRequest({ body: { openid: 'test_openid_empty' } });
@@ -140,8 +138,8 @@ describe('WeChat Auth Controller Test', () => {
 
       expect(res.status).toHaveBeenCalledWith(200);
       const response = res.json.mock.calls[0][0];
-      expect(response.data.user.isProfileComplete).toBe(false);
       expect(response.data.user.username).toBe('');
+      expect(response.data.user.avatar).toBe('');
     });
 
     test('should return 404 when user does not exist', async () => {
@@ -191,7 +189,6 @@ describe('WeChat Auth Controller Test', () => {
       expect(response.success).toBe(true);
       expect(response.message).toBe('用户资料完善成功');
       expect(response.data.user.username).toBe('new_user');
-      expect(response.data.user.isProfileComplete).toBe(true);
 
       const updatedUser = await User.findById('test_openid_456');
       expect(updatedUser.username).toBe('new_user');

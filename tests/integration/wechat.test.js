@@ -34,7 +34,6 @@ describe('WeChat Integration Test', () => {
         data: { openid: 'test_openid_123' }
       });
 
-      // 验证 User 已被自动创建
       const user = await User.findById('test_openid_123');
       expect(user).not.toBeNull();
       expect(user.username).toBe('');
@@ -84,7 +83,7 @@ describe('WeChat Integration Test', () => {
   });
 
   describe('POST /api/wechat/get-user-info', () => {
-    test('should return user info with isProfileComplete=true', async () => {
+    test('should return user info for complete profile', async () => {
       await createTestUser({
         _id: 'test_openid_123',
         username: 'test_user',
@@ -104,14 +103,13 @@ describe('WeChat Integration Test', () => {
             _id: 'test_openid_123',
             username: 'test_user',
             avatar: 'https://example.com/avatar.jpg',
-            isAdmin: false,
-            isProfileComplete: true
+            isAdmin: false
           }
         }
       });
     });
 
-    test('should return isProfileComplete=false for empty profile', async () => {
+    test('should return empty username/avatar for profile not yet complete', async () => {
       await User.create({ _id: 'empty_profile_openid' });
 
       const response = await request(app)
@@ -119,8 +117,8 @@ describe('WeChat Integration Test', () => {
         .send({ openid: 'empty_profile_openid' })
         .expect(200);
 
-      expect(response.body.data.user.isProfileComplete).toBe(false);
       expect(response.body.data.user.username).toBe('');
+      expect(response.body.data.user.avatar).toBe('');
     });
 
     test('should return 404 when user does not exist', async () => {
@@ -162,8 +160,7 @@ describe('WeChat Integration Test', () => {
           user: expect.objectContaining({
             _id: 'test_openid_456',
             username: 'new_user',
-            avatar: 'https://example.com/avatar.jpg',
-            isProfileComplete: true
+            avatar: 'https://example.com/avatar.jpg'
           })
         }
       });
@@ -214,13 +211,14 @@ describe('WeChat Integration Test', () => {
 
       expect(openidResponse.body.data.openid).toBe('flow_test_openid');
 
-      // 2. 查用户信息，isProfileComplete=false，跳引导页
+      // 2. 查用户信息，username/avatar 为空，前端跳引导页
       const userInfoResponse = await request(app)
         .post('/api/wechat/get-user-info')
         .send({ openid: 'flow_test_openid' })
         .expect(200);
 
-      expect(userInfoResponse.body.data.user.isProfileComplete).toBe(false);
+      expect(userInfoResponse.body.data.user.username).toBe('');
+      expect(userInfoResponse.body.data.user.avatar).toBe('');
 
       // 3. 用户填写头像和名字
       const completeResponse = await request(app)
@@ -232,16 +230,16 @@ describe('WeChat Integration Test', () => {
         })
         .expect(200);
 
-      expect(completeResponse.body.data.user.isProfileComplete).toBe(true);
+      expect(completeResponse.body.data.user.username).toBe('flow_test_user');
 
-      // 4. 再次查用户信息，isProfileComplete=true，进主页
+      // 4. 再次查用户信息，username/avatar 已有值，进主页
       const userInfoResponse2 = await request(app)
         .post('/api/wechat/get-user-info')
         .send({ openid: 'flow_test_openid' })
         .expect(200);
 
       expect(userInfoResponse2.body.data.user.username).toBe('flow_test_user');
-      expect(userInfoResponse2.body.data.user.isProfileComplete).toBe(true);
+      expect(userInfoResponse2.body.data.user.avatar).toBe('https://example.com/flow-avatar.jpg');
     });
   });
 });

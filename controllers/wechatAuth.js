@@ -91,8 +91,7 @@ async function getUserInfo(req, res) {
           _id: user._id,
           username: user.username,
           avatar: user.avatar,
-          isAdmin: user.isAdmin,
-          isProfileComplete: !!(user.username && user.avatar)
+          isAdmin: user.isAdmin
         }
       }
     });
@@ -147,8 +146,7 @@ async function completeProfile(req, res) {
           _id: user._id,
           username: user.username,
           avatar: user.avatar,
-          isAdmin: user.isAdmin,
-          isProfileComplete: true
+          isAdmin: user.isAdmin
         }
       }
     });

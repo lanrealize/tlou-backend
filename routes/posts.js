@@ -63,7 +63,7 @@ router.post('/', checkOpenid, checkImagesMiddleware, requirePermission('circle',
     images: images || []
   });
 
-  await post.populate('author', 'username avatar');
+  await post.populate('author', 'username avatar isAI');
 
   updateCircleActivity(circleId);
 
@@ -94,7 +94,7 @@ router.get('/', checkOpenid, requirePermission('circle', 'access'), [
   const { circleId } = req.query;
 
   const posts = await Post.find({ circle: circleId })
-    .populate('author', 'username avatar')
+    .populate('author', 'username avatar isAI')
     .populate('reactions.user', 'username avatar')
     .sort({ createdAt: -1 });
 
