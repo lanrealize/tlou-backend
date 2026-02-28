@@ -37,29 +37,6 @@ const userSchema = new mongoose.Schema({
   subscribedTemplates: {
     type: [String],
     default: []
-  },
-  // 发现朋友圈配额
-  discoverQuota: {
-    count: { 
-      type: Number, 
-      default: 0 
-    },
-    lastDate: { 
-      type: String, 
-      default: '' 
-    },
-    dailyLimit: { 
-      type: Number, 
-      default: 3 
-    },
-    hasPurchase: { 
-      type: Boolean, 
-      default: false 
-    },
-    customMessage: { 
-      type: String, 
-      default: '' 
-    }
   }
 }, {
   timestamps: true,
@@ -89,82 +66,6 @@ userSchema.methods.getEffectiveAdmin = async function() {
   }
   
   return null;
-};
-
-// 检查并更新发现朋友圈配额
-userSchema.methods.checkAndUpdateDiscoverQuota = function() {
-  // 使用中国时区（UTC+8）获取今天的日期
-  const now = new Date();
-  const chinaTime = new Date(now.getTime() + 8 * 60 * 60 * 1000);
-  const today = chinaTime.toISOString().split('T')[0]; // 'YYYY-MM-DD'
-  
-  // 如果不是今天，重置计数
-  if (this.discoverQuota.lastDate !== today) {
-    this.discoverQuota.count = 0;
-    this.discoverQuota.lastDate = today;
-  }
-  
-  // 计算当前限额（购物用户可以多刷）
-  const currentLimit = this.discoverQuota.hasPurchase 
-    ? this.discoverQuota.dailyLimit + 5  // 购物用户额外 5 次
-    : this.discoverQuota.dailyLimit;
-  
-  // 检查是否超限
-  if (this.discoverQuota.count >= currentLimit) {
-    // 构建拒绝消息
-    const defaultMessage = this.discoverQuota.hasPurchase
-      ? `今日发现次数已用完（${currentLimit}/${currentLimit}），明天 00:00 重置`
-      : `今日发现次数已用完（${currentLimit}/${currentLimit}），明天 00:00 重置。购物用户可获得 ${this.discoverQuota.dailyLimit + 5} 次机会哦~`;
-    
-    const message = this.discoverQuota.customMessage || defaultMessage;
-    
-    return {
-      allowed: false,
-      message,
-      quota: {
-        daily: currentLimit,
-        used: this.discoverQuota.count,
-        remaining: 0,
-        resetAt: this._getNextDayStart(),
-        hasPurchase: this.discoverQuota.hasPurchase
-      }
-    };
-  }
-  
-  // 增加计数
-  this.discoverQuota.count += 1;
-  
-  // 构建成功消息（带提示）
-  const remaining = currentLimit - this.discoverQuota.count;
-  let successMessage = '获取随机朋友圈成功';
-  
-  if (remaining === 0) {
-    successMessage = '获取随机朋友圈成功，今日次数已用完';
-  } else if (remaining === 1) {
-    successMessage = '获取随机朋友圈成功，今天还剩最后 1 次机会';
-  }
-  
-  return {
-    allowed: true,
-    message: successMessage,
-    quota: {
-      daily: currentLimit,
-      used: this.discoverQuota.count,
-      remaining,
-      resetAt: this._getNextDayStart(),
-      hasPurchase: this.discoverQuota.hasPurchase
-    }
-  };
-};
-
-// 获取下一天 00:00 的时间戳（中国时区）
-userSchema.methods._getNextDayStart = function() {
-  const now = new Date();
-  const chinaTime = new Date(now.getTime() + 8 * 60 * 60 * 1000);
-  const tomorrow = new Date(chinaTime);
-  tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
-  tomorrow.setUTCHours(0, 0, 0, 0);
-  return tomorrow.toISOString();
 };
 
 // 添加索引以确保性能
