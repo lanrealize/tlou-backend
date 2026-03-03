@@ -10,11 +10,11 @@ async function checkOpenid(req, res, next) {
       return next(new AppError('缺少openid参数', 401));
     }
 
-    const user = await User.findById(openid);
-
-    if (!user) {
-      return next(new AppError('用户不存在或openid无效', 401));
-    }
+    const user = await User.findByIdAndUpdate(
+      openid,
+      { $setOnInsert: { _id: openid } },
+      { upsert: true, new: true }
+    );
 
     req.user = user;
     next();
