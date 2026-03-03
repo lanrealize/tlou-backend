@@ -12,16 +12,7 @@ const { deletePostsWithImages } = require('../utils/memberCleanup');
 const router = express.Router();
 
 // 创建朋友圈
-router.post('/', checkOpenid, [
-  body('name')
-    .notEmpty()
-    .withMessage('朋友圈名称不能为空')
-], catchAsync(async (req, res) => {
-  const errors = validationResult(req);
-  if (!errors.isEmpty()) {
-    throw new AppError('输入验证失败: ' + errors.array().map(e => e.msg).join(', '), 400);
-  }
-
+router.post('/', checkOpenid, catchAsync(async (req, res) => {
   const { name, description } = req.body;
 
   const circle = await Circle.create({
