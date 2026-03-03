@@ -42,8 +42,8 @@ echo "======================================"
 cd ${PROJECT_DIR}
 echo "当前目录: \$(pwd)"
 echo "强制使用远程仓库代码，丢弃本地更改..."
-git fetch origin master
-git reset --hard origin/master
+git fetch origin feature/ai-only-redesign
+git reset --hard origin/feature/ai-only-redesign
 echo "✓ 代码强制同步完成"
 echo ""
 
