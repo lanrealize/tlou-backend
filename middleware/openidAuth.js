@@ -5,6 +5,7 @@ const { AppError } = require('../utils/errorHandler');
 async function checkOpenid(req, res, next) {
   try {
     const openid = req.body.openid || req.query.openid || req.headers['x-openid'];
+    console.log('[checkOpenid] path:', req.path, 'openid:', openid);
 
     if (!openid) {
       return next(new AppError('缺少openid参数', 401));
