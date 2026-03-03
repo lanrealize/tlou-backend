@@ -3,7 +3,7 @@ const mongoose = require('mongoose');
 const circleSchema = new mongoose.Schema({
   name: {
     type: String,
-    required: true,
+    default: '',
     maxlength: 50
   },
   creator: {
