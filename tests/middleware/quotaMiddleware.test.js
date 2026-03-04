@@ -1,4 +1,4 @@
-const { quota, deductQuota, getQuotaSnapshot } = require('../../middleware/quotaMiddleware');
+const { quota, deductQuota, getQuotaSnapshot, getFullQuotaSnapshot } = require('../../middleware/quotaMiddleware');
 const { createTestUser, createMockRequest, createMockResponse, createMockNext } = require('../helpers/testUtils');
 const User = require('../../models/User');
 
@@ -6,47 +6,38 @@ function todayStr() {
   return new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Shanghai' });
 }
 
+async function createTodayUser() {
+  return createTestUser(); // createdAt 默认是现在，即今天
+}
+
+async function createOldUser() {
+  const user = await createTestUser();
+  // 直接操作底层集合绕过 timestamps 保护，把 createdAt 改为昨天
+  await User.collection.updateOne(
+    { _id: user._id },
+    { $set: { createdAt: new Date(Date.now() - 24 * 60 * 60 * 1000) } }
+  );
+  return User.findById(user._id);
+}
+
 describe('quotaMiddleware', () => {
-  let user;
-
-  beforeEach(async () => {
-    user = await createTestUser();
-  });
-
   describe('quota() 检查中间件', () => {
-    test('新用户首次发帖应通过（首日配额7次）', async () => {
-      const req = createMockRequest({ user });
+    test('今天注册的用户享受首日配额7次，未超限应通过', async () => {
+      const user = await createTodayUser();
       const next = createMockNext();
-      await quota('post')(req, createMockResponse(), next);
+      await quota('post')(createMockRequest({ user }), createMockResponse(), next);
       expect(next).toHaveBeenCalledWith();
     });
 
-    test('首日发帖第7次通过，第8次返回 429 quota_exceeded', async () => {
-      // 设置已用6次，今天，firstUsedAt=今天
+    test('今天注册已用7次，返回 429 quota_exceeded', async () => {
+      const user = await createTodayUser();
       await User.findByIdAndUpdate(user._id, {
-        'quota.post.firstUsedAt': new Date(),
-        'quota.post.todayCount': 6,
-        'quota.post.lastDate': todayStr()
-      });
-      const updatedUser = await User.findById(user._id);
-
-      // 第7次（刚好达到上限前一次）需要更新到6，检查第7次 = remaining=1，应通过
-      const req = createMockRequest({ user: updatedUser });
-      const next = createMockNext();
-      await quota('post')(req, createMockResponse(), next);
-      expect(next).toHaveBeenCalledWith();
-    });
-
-    test('首日配额用尽后返回 429 quota_exceeded', async () => {
-      await User.findByIdAndUpdate(user._id, {
-        'quota.post.firstUsedAt': new Date(),
         'quota.post.todayCount': 7,
         'quota.post.lastDate': todayStr()
       });
-      const updatedUser = await User.findById(user._id);
-
+      const updated = await User.findById(user._id);
       const next = createMockNext();
-      await quota('post')(createMockRequest({ user: updatedUser }), createMockResponse(), next);
+      await quota('post')(createMockRequest({ user: updated }), createMockResponse(), next);
 
       expect(next).toHaveBeenCalledWith(expect.objectContaining({
         statusCode: 429,
@@ -55,17 +46,15 @@ describe('quotaMiddleware', () => {
       }));
     });
 
-    test('次日配额为5次，超限返回 429', async () => {
-      const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    test('非首日用户配额为5次，超限返回 429', async () => {
+      const user = await createOldUser();
       await User.findByIdAndUpdate(user._id, {
-        'quota.post.firstUsedAt': yesterday,      // 非今天 = 非首日
         'quota.post.todayCount': 5,
         'quota.post.lastDate': todayStr()
       });
-      const updatedUser = await User.findById(user._id);
-
+      const updated = await User.findById(user._id);
       const next = createMockNext();
-      await quota('post')(createMockRequest({ user: updatedUser }), createMockResponse(), next);
+      await quota('post')(createMockRequest({ user: updated }), createMockResponse(), next);
 
       expect(next).toHaveBeenCalledWith(expect.objectContaining({
         statusCode: 429,
@@ -74,42 +63,54 @@ describe('quotaMiddleware', () => {
     });
 
     test('跨天后计数重置，应通过', async () => {
+      const user = await createOldUser();
       await User.findByIdAndUpdate(user._id, {
-        'quota.post.firstUsedAt': new Date(Date.now() - 2 * 24 * 60 * 60 * 1000),
-        'quota.post.todayCount': 999,         // 昨天已超限
-        'quota.post.lastDate': '2000-01-01'   // 非今天，触发跨天重置
+        'quota.post.todayCount': 999,
+        'quota.post.lastDate': '2000-01-01' // 非今天
       });
-      const updatedUser = await User.findById(user._id);
-
+      const updated = await User.findById(user._id);
       const next = createMockNext();
-      await quota('post')(createMockRequest({ user: updatedUser }), createMockResponse(), next);
+      await quota('post')(createMockRequest({ user: updated }), createMockResponse(), next);
       expect(next).toHaveBeenCalledWith();
     });
 
     test('isPremium 用户跳过配额检查', async () => {
+      const user = await createOldUser();
       await User.findByIdAndUpdate(user._id, {
         isPremium: true,
-        'quota.post.firstUsedAt': new Date(),
         'quota.post.todayCount': 999,
         'quota.post.lastDate': todayStr()
       });
-      const updatedUser = await User.findById(user._id);
-
+      const updated = await User.findById(user._id);
       const next = createMockNext();
-      await quota('post')(createMockRequest({ user: updatedUser }), createMockResponse(), next);
+      await quota('post')(createMockRequest({ user: updated }), createMockResponse(), next);
       expect(next).toHaveBeenCalledWith();
     });
 
     test('评论首日配额为30次', async () => {
+      const user = await createTodayUser();
       await User.findByIdAndUpdate(user._id, {
-        'quota.comment.firstUsedAt': new Date(),
         'quota.comment.todayCount': 30,
         'quota.comment.lastDate': todayStr()
       });
-      const updatedUser = await User.findById(user._id);
-
+      const updated = await User.findById(user._id);
       const next = createMockNext();
-      await quota('comment')(createMockRequest({ user: updatedUser }), createMockResponse(), next);
+      await quota('comment')(createMockRequest({ user: updated }), createMockResponse(), next);
+      expect(next).toHaveBeenCalledWith(expect.objectContaining({
+        statusCode: 429,
+        reason: 'quota_exceeded'
+      }));
+    });
+
+    test('评论非首日配额为20次', async () => {
+      const user = await createOldUser();
+      await User.findByIdAndUpdate(user._id, {
+        'quota.comment.todayCount': 20,
+        'quota.comment.lastDate': todayStr()
+      });
+      const updated = await User.findById(user._id);
+      const next = createMockNext();
+      await quota('comment')(createMockRequest({ user: updated }), createMockResponse(), next);
       expect(next).toHaveBeenCalledWith(expect.objectContaining({
         statusCode: 429,
         reason: 'quota_exceeded'
@@ -118,15 +119,16 @@ describe('quotaMiddleware', () => {
   });
 
   describe('deductQuota()', () => {
-    test('首次调用应设置 firstUsedAt 并将计数置为1', async () => {
+    test('首次调用将计数置为1，lastDate 设为今天', async () => {
+      const user = await createTodayUser();
       await deductQuota(user._id, 'post');
       const updated = await User.findById(user._id);
-      expect(updated.quota.post.firstUsedAt).not.toBeNull();
       expect(updated.quota.post.todayCount).toBe(1);
       expect(updated.quota.post.lastDate).toBe(todayStr());
     });
 
-    test('同日多次扣减应累加', async () => {
+    test('同日多次扣减累加', async () => {
+      const user = await createTodayUser();
       await deductQuota(user._id, 'post');
       await deductQuota(user._id, 'post');
       await deductQuota(user._id, 'post');
@@ -135,6 +137,7 @@ describe('quotaMiddleware', () => {
     });
 
     test('发帖和评论扣减互不影响', async () => {
+      const user = await createTodayUser();
       await deductQuota(user._id, 'post');
       await deductQuota(user._id, 'comment');
       await deductQuota(user._id, 'comment');
@@ -145,26 +148,41 @@ describe('quotaMiddleware', () => {
   });
 
   describe('getQuotaSnapshot()', () => {
-    test('新用户快照 remaining 应为首日上限', async () => {
+    test('今天注册的新用户 remaining 为首日上限7', async () => {
+      const user = await createTodayUser();
       const snapshot = getQuotaSnapshot(user, 'post');
       expect(snapshot.remaining).toBe(7);
       expect(snapshot.resetAt).toBeDefined();
     });
 
-    test('扣减后 remaining 减少', async () => {
-      await deductQuota(user._id, 'post');
-      const updated = await User.findById(user._id);
-      const snapshot = getQuotaSnapshot(updated, 'post');
-      expect(snapshot.remaining).toBe(6);
+    test('非首日新用户 remaining 为次日上限5', async () => {
+      const user = await createOldUser();
+      const snapshot = getQuotaSnapshot(user, 'post');
+      expect(snapshot.remaining).toBe(5);
     });
 
-    test('resetAt 应是明天零点', () => {
-      const snapshot = getQuotaSnapshot(user, 'post');
-      const resetAt = new Date(snapshot.resetAt);
-      const now = new Date();
-      expect(resetAt.getTime()).toBeGreaterThan(now.getTime());
-      // 不超过48小时
-      expect(resetAt.getTime() - now.getTime()).toBeLessThan(48 * 60 * 60 * 1000);
+    test('扣减后 remaining 相应减少', async () => {
+      const user = await createTodayUser();
+      await deductQuota(user._id, 'post');
+      const updated = await User.findById(user._id);
+      expect(getQuotaSnapshot(updated, 'post').remaining).toBe(6);
+    });
+
+    test('resetAt 是明天零点之后', () => {
+      const user = { createdAt: new Date(), quota: {} };
+      const { resetAt } = getQuotaSnapshot(user, 'post');
+      expect(new Date(resetAt).getTime()).toBeGreaterThan(Date.now());
+    });
+  });
+
+  describe('getFullQuotaSnapshot()', () => {
+    test('同时返回 post 和 comment 快照', async () => {
+      const user = await createTodayUser();
+      const snapshot = getFullQuotaSnapshot(user);
+      expect(snapshot).toHaveProperty('post.remaining');
+      expect(snapshot).toHaveProperty('post.resetAt');
+      expect(snapshot).toHaveProperty('comment.remaining');
+      expect(snapshot).toHaveProperty('comment.resetAt');
     });
   });
 });

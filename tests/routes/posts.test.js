@@ -391,7 +391,7 @@ describe('Posts Routes Test', () => {
         })
         .expect(200);
 
-      expect(response.body).toEqual({
+      expect(response.body).toMatchObject({
         success: true,
         data: {
           posts: expect.arrayContaining([
@@ -403,6 +403,10 @@ describe('Posts Routes Test', () => {
               comments: expect.any(Array)
             })
           ])
+        },
+        quota: {
+          post: expect.objectContaining({ remaining: expect.any(Number) }),
+          comment: expect.objectContaining({ remaining: expect.any(Number) })
         }
       });
     });

@@ -41,12 +41,10 @@ const userSchema = new mongoose.Schema({
   // 配额：发帖和评论分开计数
   quota: {
     post: {
-      firstUsedAt: { type: Date, default: null }, // 首次发帖时间，用于判断是否首日
       todayCount:  { type: Number, default: 0 },
-      lastDate:    { type: String, default: '' }  // 'YYYY-MM-DD'，用于判断是否跨天
+      lastDate:    { type: String, default: '' }
     },
     comment: {
-      firstUsedAt: { type: Date, default: null },
       todayCount:  { type: Number, default: 0 },
       lastDate:    { type: String, default: '' }
     }

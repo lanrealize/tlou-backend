@@ -7,7 +7,7 @@ const { requirePermission } = require('../middleware/circleAuth');
 const { checkImagesMiddleware, cancelImageDeletion } = require('../middleware/imageCheck');
 const { catchAsync, AppError } = require('../utils/errorHandler');
 const { rateLimit } = require('../middleware/rateLimitMiddleware');
-const { quota, deductQuota, getQuotaSnapshot } = require('../middleware/quotaMiddleware');
+const { quota, deductQuota, getQuotaSnapshot, getFullQuotaSnapshot } = require('../middleware/quotaMiddleware');
 const User = require('../models/User');
 const mongoose = require('mongoose');
 const { updateCircleActivity } = require('../utils/circleUtils');
@@ -145,7 +145,8 @@ router.get('/', checkOpenid, requirePermission('circle', 'access'), [
 
   res.json({
     success: true,
-    data: { posts: postsWithPopulatedComments }
+    data: { posts: postsWithPopulatedComments },
+    quota: getFullQuotaSnapshot(req.user)
   });
 }));
 
