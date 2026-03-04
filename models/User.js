@@ -37,6 +37,27 @@ const userSchema = new mongoose.Schema({
   subscribedTemplates: {
     type: [String],
     default: []
+  },
+  // 配额：发帖和评论分开计数
+  quota: {
+    post: {
+      firstUsedAt: { type: Date, default: null }, // 首次发帖时间，用于判断是否首日
+      todayCount:  { type: Number, default: 0 },
+      lastDate:    { type: String, default: '' }  // 'YYYY-MM-DD'，用于判断是否跨天
+    },
+    comment: {
+      firstUsedAt: { type: Date, default: null },
+      todayCount:  { type: Number, default: 0 },
+      lastDate:    { type: String, default: '' }
+    }
+  },
+  // 付费权限
+  // TODO: 当前通过实体商品订单授权，不可直接销售订阅。
+  //       需接入订单系统：用户购买实体商品后写入订单记录，
+  //       此处改为检查有效订单而非布尔值。
+  isPremium: {
+    type: Boolean,
+    default: false
   }
 }, {
   timestamps: true,

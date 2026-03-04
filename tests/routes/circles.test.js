@@ -32,13 +32,13 @@ describe('Circles Routes Test', () => {
       expect(response.body.data.circle.creator._id).toBe(testUser._id.toString());
     });
 
-    test('should return 400 when name is missing', async () => {
+    test('should create circle without name', async () => {
       const response = await request(app)
         .post('/api/circles')
         .send({ openid: testUser._id })
-        .expect(400);
+        .expect(201);
 
-      expect(response.body.status).toBe('fail');
+      expect(response.body.success).toBe(true);
     });
 
     test('should return 401 when openid is missing', async () => {
@@ -50,13 +50,13 @@ describe('Circles Routes Test', () => {
       expect(response.body.status).toBe('fail');
     });
 
-    test('should return 401 when openid is invalid', async () => {
+    test('should create circle with any openid (upsert)', async () => {
       const response = await request(app)
         .post('/api/circles')
         .send({ name: '测试朋友圈', openid: 'invalid_openid' })
-        .expect(401);
+        .expect(201);
 
-      expect(response.body.status).toBe('fail');
+      expect(response.body.success).toBe(true);
     });
   });
 

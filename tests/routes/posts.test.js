@@ -41,7 +41,7 @@ describe('Posts Routes Test', () => {
         .send(postData)
         .expect(201);
 
-      expect(response.body).toEqual({
+      expect(response.body).toMatchObject({
         success: true,
         message: '发布成功',
         data: {
@@ -52,7 +52,8 @@ describe('Posts Routes Test', () => {
               username: testUser.username
             })
           })
-        }
+        },
+        quota: { post: expect.objectContaining({ remaining: expect.any(Number) }) }
       });
     });
 
@@ -72,7 +73,7 @@ describe('Posts Routes Test', () => {
         .send(postData)
         .expect(201);
 
-      expect(response.body).toEqual({
+      expect(response.body).toMatchObject({
         success: true,
         message: '发布成功',
         data: {
@@ -86,7 +87,8 @@ describe('Posts Routes Test', () => {
               username: testUser.username
             })
           })
-        }
+        },
+        quota: { post: expect.objectContaining({ remaining: expect.any(Number) }) }
       });
     });
 
@@ -106,7 +108,7 @@ describe('Posts Routes Test', () => {
         .send(postData)
         .expect(201);
 
-      expect(response.body).toEqual({
+      expect(response.body).toMatchObject({
         success: true,
         message: '发布成功',
         data: {
@@ -120,7 +122,8 @@ describe('Posts Routes Test', () => {
               username: testUser.username
             })
           })
-        }
+        },
+        quota: { post: expect.objectContaining({ remaining: expect.any(Number) }) }
       });
     });
 

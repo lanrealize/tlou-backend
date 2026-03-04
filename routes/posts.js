@@ -6,6 +6,8 @@ const { checkOpenid } = require('../middleware/openidAuth');
 const { requirePermission } = require('../middleware/circleAuth');
 const { checkImagesMiddleware, cancelImageDeletion } = require('../middleware/imageCheck');
 const { catchAsync, AppError } = require('../utils/errorHandler');
+const { rateLimit } = require('../middleware/rateLimitMiddleware');
+const { quota, deductQuota, getQuotaSnapshot } = require('../middleware/quotaMiddleware');
 const User = require('../models/User');
 const mongoose = require('mongoose');
 const { updateCircleActivity } = require('../utils/circleUtils');
@@ -14,7 +16,7 @@ const { deleteQiniuFiles } = require('../utils/qiniuUtils');
 const router = express.Router();
 
 // 创建帖子
-router.post('/', checkOpenid, checkImagesMiddleware, requirePermission('circle', 'member'), [
+router.post('/', checkOpenid, rateLimit('post'), quota('post'), checkImagesMiddleware, requirePermission('circle', 'member'), [
   body('circleId')
     .notEmpty()
     .withMessage('朋友圈ID不能为空')
@@ -71,10 +73,15 @@ router.post('/', checkOpenid, checkImagesMiddleware, requirePermission('circle',
     cancelImageDeletion(req.imageDeletionId);
   }
 
+  // 扣减配额后取最新快照，附带到响应让前端直接用
+  await deductQuota(req.user._id, 'post');
+  const updatedUser = await User.findById(req.user._id, 'quota isPremium');
+
   res.status(201).json({
     success: true,
     message: '发布成功',
-    data: { post }
+    data: { post },
+    quota: { post: getQuotaSnapshot(updatedUser, 'post') }
   });
 }));
 
@@ -196,7 +203,7 @@ router.delete('/:id', checkOpenid, requirePermission('post', 'author'), catchAsy
 }));
 
 // 添加评论
-router.post('/:id/comments', checkOpenid, requirePermission('post', 'access'), [
+router.post('/:id/comments', checkOpenid, rateLimit('comment'), quota('comment'), requirePermission('post', 'access'), [
   body('content')
     .notEmpty()
     .withMessage('评论内容不能为空')
@@ -238,13 +245,18 @@ router.post('/:id/comments', checkOpenid, requirePermission('post', 'access'), [
 
   updateCircleActivity(req.post.circle._id);
 
+  // 扣减配额后取最新快照，附带到响应让前端直接用
+  await deductQuota(req.user._id, 'comment');
+  const updatedUser = await User.findById(req.user._id, 'quota isPremium');
+
   res.status(201).json({
     success: true,
     message: '评论成功',
     data: {
       commentId: newComment._id,
       _id: newComment._id
-    }
+    },
+    quota: { comment: getQuotaSnapshot(updatedUser, 'comment') }
   });
 }));
 

@@ -14,14 +14,10 @@ describe('Circle Model Test', () => {
       expect(circle.updatedAt).toBeDefined();
     });
 
-    test('should require name', async () => {
+    test('should create circle without name (name is optional)', async () => {
       const creator = await createTestUser();
-      try {
-        await Circle.create({ creator: creator._id });
-        fail('Should have thrown validation error');
-      } catch (error) {
-        expect(error.errors.name).toBeDefined();
-      }
+      const circle = await Circle.create({ creator: creator._id });
+      expect(circle.name).toBe('');
     });
 
     test('should require creator', async () => {

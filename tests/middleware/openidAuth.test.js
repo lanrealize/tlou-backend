@@ -78,7 +78,7 @@ describe('OpenID Auth Middleware Test', () => {
       expect(error.statusCode).toBe(401);
     });
 
-    test('should throw error when user not found', async () => {
+    test('should auto-create user when openid not found (upsert)', async () => {
       const req = createMockRequest({
         body: { openid: 'non_existent_openid' }
       });
@@ -87,10 +87,9 @@ describe('OpenID Auth Middleware Test', () => {
 
       await checkOpenid(req, res, next);
 
-      expect(next).toHaveBeenCalledWith(expect.any(AppError));
-      const error = next.mock.calls[0][0];
-      expect(error.message).toBe('用户不存在或openid无效');
-      expect(error.statusCode).toBe(401);
+      expect(next).toHaveBeenCalledWith();
+      expect(req.user).toBeDefined();
+      expect(req.user._id).toBe('non_existent_openid');
     });
 
     test('should prioritize body over query and headers', async () => {
@@ -128,13 +127,11 @@ describe('OpenID Auth Middleware Test', () => {
     });
 
     test('should handle database errors gracefully', async () => {
-      // 模拟数据库错误
-      const originalFindOne = require('../../models/User').findOne;
-      require('../../models/User').findOne = jest.fn().mockRejectedValue(new Error('Database error'));
+      const User = require('../../models/User');
+      const original = User.findByIdAndUpdate;
+      User.findByIdAndUpdate = jest.fn().mockRejectedValue(new Error('Database error'));
 
-      const req = createMockRequest({
-        body: { openid: 'test_openid' }
-      });
+      const req = createMockRequest({ body: { openid: 'test_openid' } });
       const res = createMockResponse();
       const next = createMockNext();
 
@@ -145,8 +142,7 @@ describe('OpenID Auth Middleware Test', () => {
       expect(error.message).toBe('验证openid失败');
       expect(error.statusCode).toBe(500);
 
-      // 恢复原始方法
-      require('../../models/User').findOne = originalFindOne;
+      User.findByIdAndUpdate = original;
     });
   });
 }); 

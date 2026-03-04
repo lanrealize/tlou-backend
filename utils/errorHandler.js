@@ -2,11 +2,12 @@
 
 // 自定义错误类
 class AppError extends Error {
-  constructor(message, statusCode) {
+  constructor(message, statusCode, payload = {}) {
     super(message);
     this.statusCode = statusCode;
     this.status = `${statusCode}`.startsWith('4') ? 'fail' : 'error';
     this.isOperational = true;
+    Object.assign(this, payload); // 附加 reason / retryAfter / remaining 等字段
 
     Error.captureStackTrace(this, this.constructor);
   }
@@ -41,6 +42,11 @@ const globalErrorHandler = (err, req, res, next) => {
       hint: '请移除违规图片后重新发布，或在10分钟内重新调整发布'
     };
   }
+
+  // 透传 429 相关 payload（reason / retryAfter / remaining）
+  if (err.reason) response.reason = err.reason;
+  if (err.retryAfter != null) response.retryAfter = err.retryAfter;
+  if (err.remaining != null) response.remaining = err.remaining;
 
   if (process.env.NODE_ENV === 'development') {
     response.error = err;
