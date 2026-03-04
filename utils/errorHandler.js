@@ -27,7 +27,7 @@ const globalErrorHandler = (err, req, res, next) => {
 
   // 构建基础响应对象
   const response = {
-    status: err.status,
+    success: false,
     message: err.message
   };
 
@@ -57,7 +57,7 @@ const globalErrorHandler = (err, req, res, next) => {
   if (process.env.NODE_ENV === 'production' && !err.isOperational) {
     console.error('ERROR 💥', err);
     return res.status(500).json({
-      status: 'error',
+      success: false,
       message: 'Something went wrong!'
     });
   }

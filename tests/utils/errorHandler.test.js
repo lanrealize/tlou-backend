@@ -108,7 +108,7 @@ describe('Error Handler Test', () => {
 
       expect(res.status).toHaveBeenCalledWith(400);
       expect(res.json).toHaveBeenCalledWith({
-        status: 'fail',
+        success: false,
         error: appError,
         message: 'Test error',
         stack: appError.stack
@@ -127,7 +127,7 @@ describe('Error Handler Test', () => {
 
       expect(res.status).toHaveBeenCalledWith(400);
       expect(res.json).toHaveBeenCalledWith({
-        status: 'fail',
+        success: false,
         message: 'Test error'
       });
     });
@@ -146,7 +146,7 @@ describe('Error Handler Test', () => {
 
       expect(res.status).toHaveBeenCalledWith(500);
       expect(res.json).toHaveBeenCalledWith({
-        status: 'error',
+        success: false,
         message: 'Something went wrong!'
       });
     });
@@ -176,7 +176,7 @@ describe('Error Handler Test', () => {
 
       expect(res.json).toHaveBeenCalledWith(
         expect.objectContaining({
-          status: 'error'
+          success: false
         })
       );
     });

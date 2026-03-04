@@ -47,7 +47,7 @@ describe('Circles Routes Test', () => {
         .send({ name: '测试朋友圈' })
         .expect(401);
 
-      expect(response.body.status).toBe('fail');
+      expect(response.body.success).toBe(false);
     });
 
     test('should create circle with any openid (upsert)', async () => {
@@ -93,7 +93,7 @@ describe('Circles Routes Test', () => {
         .get('/api/circles/my')
         .expect(401);
 
-      expect(response.body.status).toBe('fail');
+      expect(response.body.success).toBe(false);
     });
   });
 
@@ -132,7 +132,7 @@ describe('Circles Routes Test', () => {
         .send({ openid: testUser._id })
         .expect(404);
 
-      expect(response.body.status).toBe('fail');
+      expect(response.body.success).toBe(false);
     });
 
     test('should return 403 when non-creator tries to delete circle', async () => {
@@ -143,7 +143,7 @@ describe('Circles Routes Test', () => {
         .send({ openid: nonCreator._id })
         .expect(403);
 
-      expect(response.body.status).toBe('fail');
+      expect(response.body.success).toBe(false);
     });
 
     test('should return 401 when openid is missing', async () => {
@@ -151,7 +151,7 @@ describe('Circles Routes Test', () => {
         .delete(`/api/circles/${testCircle._id}`)
         .expect(401);
 
-      expect(response.body.status).toBe('fail');
+      expect(response.body.success).toBe(false);
     });
   });
 
@@ -173,7 +173,7 @@ describe('Circles Routes Test', () => {
         .send({ openid: testUser._id })
         .expect(400);
 
-      expect(response.body.status).toBe('fail');
+      expect(response.body.success).toBe(false);
     });
 
     test('should return 403 when non-creator tries to update settings', async () => {
@@ -184,7 +184,7 @@ describe('Circles Routes Test', () => {
         .send({ openid: nonCreator._id, name: '新名字' })
         .expect(403);
 
-      expect(response.body.status).toBe('fail');
+      expect(response.body.success).toBe(false);
     });
 
     test('should return 400 when name is too long', async () => {
@@ -193,7 +193,7 @@ describe('Circles Routes Test', () => {
         .send({ openid: testUser._id, name: 'a'.repeat(51) })
         .expect(400);
 
-      expect(response.body.status).toBe('fail');
+      expect(response.body.success).toBe(false);
     });
   });
 
@@ -217,7 +217,7 @@ describe('Circles Routes Test', () => {
         .query({ openid: otherUser._id })
         .expect(403);
 
-      expect(response.body.status).toBe('fail');
+      expect(response.body.success).toBe(false);
     });
 
     test('should return 404 when circle does not exist', async () => {
@@ -228,7 +228,7 @@ describe('Circles Routes Test', () => {
         .query({ openid: testUser._id })
         .expect(404);
 
-      expect(response.body.status).toBe('fail');
+      expect(response.body.success).toBe(false);
     });
 
     test('should return 401 when openid is missing', async () => {
@@ -236,7 +236,7 @@ describe('Circles Routes Test', () => {
         .get(`/api/circles/${testCircle._id}`)
         .expect(401);
 
-      expect(response.body.status).toBe('fail');
+      expect(response.body.success).toBe(false);
     });
   });
 });

@@ -139,7 +139,7 @@ describe('Posts Routes Test', () => {
         .expect(400);
 
       expect(response.body).toEqual({
-        status: 'fail',
+        success: false,
         message: expect.stringContaining('朋友圈ID不能为空')
       });
     });
@@ -157,7 +157,7 @@ describe('Posts Routes Test', () => {
         .expect(400);
 
       expect(response.body).toEqual({
-        status: 'fail',
+        success: false,
         message: '无效的朋友圈ID'
       });
     });
@@ -176,7 +176,7 @@ describe('Posts Routes Test', () => {
         .expect(404);
 
       expect(response.body).toEqual({
-        status: 'fail',
+        success: false,
         message: '朋友圈不存在'
       });
     });
@@ -210,7 +210,7 @@ describe('Posts Routes Test', () => {
         .expect(422);
 
       // 验证响应包含详细的违规信息
-      expect(response.body.status).toBe('fail');
+      expect(response.body.success).toBe(false);
       expect(response.body.message).toContain('检测到违规图片');
       expect(response.body.violationDetails).toBeDefined();
       expect(response.body.violationDetails.violatedImages).toHaveLength(1);
@@ -273,7 +273,7 @@ describe('Posts Routes Test', () => {
         .send(postData)
         .expect(403);
 
-      expect(response.body.status).toBe('fail');
+      expect(response.body.success).toBe(false);
     });
 
     test('should return 401 when openid is missing', async () => {
@@ -288,7 +288,7 @@ describe('Posts Routes Test', () => {
         .expect(401);
 
       expect(response.body).toEqual({
-        status: 'fail',
+        success: false,
         message: '缺少openid参数'
       });
     });
@@ -309,7 +309,7 @@ describe('Posts Routes Test', () => {
         .expect(400);
 
       expect(response.body).toEqual({
-        status: 'fail',
+        success: false,
         message: expect.stringContaining('图片对象必须包含有效的width字段')
       });
     });
@@ -330,7 +330,7 @@ describe('Posts Routes Test', () => {
         .expect(400);
 
       expect(response.body).toEqual({
-        status: 'fail',
+        success: false,
         message: '图片检查失败: 第1张图片URL为空'
       });
     });
@@ -351,7 +351,7 @@ describe('Posts Routes Test', () => {
         .expect(400);
 
       expect(response.body).toEqual({
-        status: 'fail',
+        success: false,
         message: expect.stringContaining('图片对象必须包含有效的width字段')
       });
     });
@@ -374,7 +374,7 @@ describe('Posts Routes Test', () => {
         })
         .expect(401);
 
-      expect(response.body.status).toBe('fail');
+      expect(response.body.success).toBe(false);
       expect(response.body.message).toBe('缺少openid参数');
     });
 
@@ -418,7 +418,7 @@ describe('Posts Routes Test', () => {
         .expect(400);
 
       expect(response.body).toEqual({
-        status: 'fail',
+        success: false,
         message: expect.stringContaining('朋友圈ID不能为空')
       });
     });
@@ -435,7 +435,7 @@ describe('Posts Routes Test', () => {
         .expect(404);
 
       expect(response.body).toEqual({
-        status: 'fail',
+        success: false,
         message: '朋友圈不存在'
       });
     });
@@ -452,7 +452,7 @@ describe('Posts Routes Test', () => {
         })
         .expect(403);
 
-      expect(response.body.status).toBe('fail');
+      expect(response.body.success).toBe(false);
     });
 
     test('should return posts with reactions information', async () => {
@@ -504,7 +504,7 @@ describe('Posts Routes Test', () => {
         .send({ openid: testUser._id })
         .expect(404);
 
-      expect(response.body.status).toBe('fail');
+      expect(response.body.success).toBe(false);
     });
   });
 
@@ -585,7 +585,7 @@ describe('Posts Routes Test', () => {
         .expect(404);
 
       expect(response.body).toEqual({
-        status: 'fail',
+        success: false,
         message: '帖子不存在或无权限删除'
       });
     });
@@ -600,7 +600,7 @@ describe('Posts Routes Test', () => {
         .expect(404);
 
       expect(response.body).toEqual({
-        status: 'fail',
+        success: false,
         message: '帖子不存在或无权限删除'
       });
     });
@@ -662,7 +662,7 @@ describe('Posts Routes Test', () => {
         .expect(400);
 
       expect(response.body).toEqual({
-        status: 'fail',
+        success: false,
         message: '输入验证失败: 评论内容不能为空'
       });
     });
@@ -680,7 +680,7 @@ describe('Posts Routes Test', () => {
         .expect(404);
 
       expect(response.body).toEqual({
-        status: 'fail',
+        success: false,
         message: '帖子不存在或无权限删除'
       });
     });
@@ -698,7 +698,7 @@ describe('Posts Routes Test', () => {
         .expect(404);
 
       expect(response.body).toEqual({
-        status: 'fail',
+        success: false,
         message: '回复的用户不存在'
       });
     });
@@ -741,7 +741,7 @@ describe('Posts Routes Test', () => {
         .expect(404);
 
       expect(response.body).toEqual({
-        status: 'fail',
+        success: false,
         message: '帖子不存在'
       });
     });
@@ -755,7 +755,7 @@ describe('Posts Routes Test', () => {
         .expect(404);
 
       expect(response.body).toEqual({
-        status: 'fail',
+        success: false,
         message: '评论不存在'
       });
     });
@@ -781,7 +781,7 @@ describe('Posts Routes Test', () => {
         .expect(403);
 
       expect(response.body).toEqual({
-        status: 'fail',
+        success: false,
         message: '无权删除此评论'
       });
     });
