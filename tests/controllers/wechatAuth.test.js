@@ -122,7 +122,8 @@ describe('WeChat Auth Controller Test', () => {
             _id: 'test_openid_123',
             username: 'test_user',
             avatar: 'https://example.com/avatar.jpg',
-            isAdmin: false
+            isAdmin: false,
+            onboardingDone: false
           }
         }
       });

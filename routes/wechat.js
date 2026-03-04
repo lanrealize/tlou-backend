@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { getOpenid, getUserInfo, completeProfile, deleteUser } = require('../controllers/wechatAuth');
+const { getOpenid, getUserInfo, completeProfile, deleteUser, markOnboardingDone } = require('../controllers/wechatAuth');
 const { checkOpenid } = require('../middleware/openidAuth');
 const { catchAsync } = require('../utils/errorHandler');
 
@@ -15,5 +15,8 @@ router.post('/complete-profile', catchAsync(completeProfile));
 
 // 4. 注销用户（需要认证）
 router.delete('/delete-account', checkOpenid, catchAsync(deleteUser));
+
+// 5. 标记 onboarding 完成
+router.post('/onboarding-done', catchAsync(markOnboardingDone));
 
 module.exports = router;

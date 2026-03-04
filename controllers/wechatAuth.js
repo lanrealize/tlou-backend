@@ -91,7 +91,8 @@ async function getUserInfo(req, res) {
           _id: user._id,
           username: user.username,
           avatar: user.avatar,
-          isAdmin: user.isAdmin
+          isAdmin: user.isAdmin,
+          onboardingDone: user.onboardingDone
         }
       }
     });
@@ -207,9 +208,23 @@ async function deleteUser(req, res) {
   }
 }
 
+// 5. 标记 onboarding 完成
+async function markOnboardingDone(req, res) {
+  const { openid } = req.body;
+
+  if (!openid) {
+    return res.status(400).json({ success: false, message: 'openid参数是必需的' });
+  }
+
+  await User.findByIdAndUpdate(openid, { onboardingDone: true });
+
+  return res.json({ success: true });
+}
+
 module.exports = {
   getOpenid,
   getUserInfo,
   completeProfile,
-  deleteUser
+  deleteUser,
+  markOnboardingDone
 };
